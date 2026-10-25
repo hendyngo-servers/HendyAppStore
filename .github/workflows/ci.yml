@@ -59,4 +59,5 @@ jobs:
           test -s dist/pages/index.html
           test -s dist/pages/config.js
           test -s dist/pages/web-user/src/app.js
-          test ! -e dist/pages/web-admin/index.html
+          test -s dist/pages/web-admin/index.html
+          test -s dist/pages/web-admin/automation.bundle.js
