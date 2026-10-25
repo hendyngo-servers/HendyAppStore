@@ -26,7 +26,7 @@ const required = [
   "workers/self-healing-bot/src/index.js", "workers/self-healing-bot/src/llm-analyzer.js",
   "workers/alert-notifier/src/index.js", "scripts/provision-cloudflare-resources.mjs",
   "scripts/render-cloudflare-config.mjs", "scripts/prepare-pages.mjs", "scripts/smoke-test.mjs", ".github/workflows/matrix-build.yml",
-  ".github/workflows/deploy-cloudflare.yml", ".github/workflows/store-release.yml",
+  ".github/workflows/deploy.yml", ".github/workflows/deploy-cloudflare.yml", ".github/workflows/store-release.yml",
   ".github/workflows/build-status-callback.yml", "wrangler.toml",
   "android/settings.gradle", "android/app/src/main/AndroidManifest.xml",
   "windows/HendyAppStore.csproj", "ios/HendyAppStore.xcodeproj/project.pbxproj",
@@ -42,7 +42,9 @@ assert.ok(rootManifest.workspaces?.includes("apps/web-user") && rootManifest.wor
 assert.ok(rootManifest.workspaces?.includes("packages/shared-types") && rootManifest.workspaces?.includes("packages/db-schema"), "Root npm workspaces must include shared types and D1 schema.");
 const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
 assert.match(deployEntry, /push:/);
-assert.match(deployEntry, /\.\/\.github\/workflows\/deploy-cloudflare\.yml/);
+assert.match(deployEntry, /npx wrangler pages deploy/);
+assert.match(deployEntry, /--functions functions/, "The main deployment workflow must bundle Pages Functions.");
+assert.match(deployEntry, /HENDY_API_BASE_URL/);
 const pagesMiddleware = readFileSync("functions/_middleware.js", "utf8");
 assert.match(pagesMiddleware, /api\/admin\/status/);
 assert.match(pagesMiddleware, /context\.next\(new Request\(rewritten, request\)\)/);
