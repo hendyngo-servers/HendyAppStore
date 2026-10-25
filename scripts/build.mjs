@@ -10,6 +10,9 @@ await copyFile(`${source}/_headers`, `${output}/_headers`);
 await copyFile(`${source}/_redirects`, `${output}/_redirects`);
 await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
 await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
+// Pages Functions can serve the Admin Studio too; middleware gates every Admin route through Backend Access validation.
+await cp("apps/web-admin", `${output}/web-admin`, { recursive: true });
+await copyFile("apps/web-admin/automation.bundle.js", `${output}/web-admin/automation.bundle.js`);
 
 function normalizedOrigin(value) {
   const rawValue = String(value || "").trim();
