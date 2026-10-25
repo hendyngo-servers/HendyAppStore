@@ -8,7 +8,7 @@ Hendy App Store is a Cloudflare-first app storefront and source-to-release studi
 - `apps/web-admin/`: Code paste zone, optional Monaco Editor, multi-file/folder uploader, virtual file tree, D1 metadata form (HTTPS icon plus up to eight screenshots per app), GitHub Actions monitor, build queue request, R2 artifact draft intake, source analyzer and reviewed AI repair proposals.
 - `packages/shared-types/`: Shared AppData, ReleaseData and BuildLog types.
 - `packages/ui-components/`: Escaping, pill and bytes-format helpers shared by both UIs.
-- `workers/edge-router/`: Public entry, Admin routing and Backend service binding.
+- `workers/edge-router/`: Public entry, Admin routing and Backend service binding. `workers/edge-router/wrangler.toml` is the integrated production config and must deploy after `hendy-app-store-api`; the root `wrangler.toml` is a standalone Worker Builds/bootstrap config with no backend binding.
 - `workers/backend-api/`: Cloudflare Access JWT verification, D1 app/build records, KV release cache, R2 artifacts/catalog, GitHub Actions dispatch/status and optional LLM repair proposal routes.
 - `workers/alert-notifier/`: HMAC-verified GitHub Actions callback, D1 build-history update and optional Discord notification.
 - `workers/self-healing-bot/`: Deterministic safe repairs and optional LLM-proposed patches.
@@ -16,6 +16,18 @@ Hendy App Store is a Cloudflare-first app storefront and source-to-release studi
 - `.github/workflows/matrix-build.yml`: Native build matrix; isolated signing job; publish only verified, signed products to R2.
 - `.github/workflows/store-release.yml`: Manual gated upload to Google Play or App Store Connect/TestFlight.
 - `.github/workflows/deploy-cloudflare.yml`: Provision and deploy R2, Pages, D1, KV, Queues, API Worker, Alert Worker and Edge Router. No Render deployment code remains.
+
+## Cloudflare dashboard build modes
+
+The root Wrangler file is deliberately a **standalone bootstrap** config for Cloudflare Workers Builds projects whose Worker name is `hendyappstore`. It deploys the edge router and static assets without a service binding, so the initial build does not fail when the Backend API has not been created yet. In that standalone mode, API and Admin requests return a fail-closed unavailable response until the integrated production Worker is deployed.
+
+The integrated application is deployed by **GitHub Actions → Deploy Hendy App Store to Cloudflare Workers and Pages**. That workflow provisions resources, deploys the Backend API first, deploys Alert Notifier next, then deploys the integrated Edge Router using `workers/edge-router/wrangler.toml`, and finally publishes the Pages storefront. Do not use the root standalone config as a substitute for that full orchestration.
+
+For a separate Cloudflare Pages project connected directly to this repository, use:
+- Build command: `npm run build`
+- Build output directory: `dist/pages`
+- Node version: `22` or later
+- Optional build environment variables: `HENDY_API_BASE_URL` and `HENDY_EDGE_BASE_URL`, each an HTTPS Worker origin (without a trailing path). The production workflow generates these automatically after provisioning.
 
 ## Local checks
 
@@ -66,7 +78,7 @@ Configure GitHub environments `cloudflare-production`, `release-signing`, and `s
 
 The provisioning workflow generates these endpoints on a `workers.dev` subdomain:
 - Public storefront: the Pages hostname emitted in the deployment summary (normally `https://hendy-app-store.pages.dev`; a unique fallback name is used if that subdomain is already taken globally)
-- Edge/Admin entry: `https://hendy-app-store-edge.<workers-subdomain>.workers.dev/admin`
+- Integrated Edge/Admin entry: `https://hendy-app-store-edge.<workers-subdomain>.workers.dev/admin`
 - Backend API: `https://hendy-app-store-api.<workers-subdomain>.workers.dev`
 - Alerts: `https://hendy-app-store-alerts.<workers-subdomain>.workers.dev/webhooks/github/build-status`
 
