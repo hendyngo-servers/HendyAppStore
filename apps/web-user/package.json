@@ -1,0 +1,9 @@
+{
+  "name": "@hendy/web-user",
+  "private": true,
+  "type": "module",
+  "description": "Public adaptive storefront frontend",
+  "scripts": {
+    "check": "node --check src/app.js"
+  }
+}

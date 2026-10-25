@@ -1,23 +1,27 @@
-# Hendy App Store — Cloudflare-first source-to-release platform
+# Hendy App Store — Cloudflare monorepo
 
-A fresh implementation of the Hendy architecture: adaptive public storefront, protected Admin Studio, Cloudflare edge routing, source/configuration analysis, GitHub synchronization, R2 release storage, and multi-OS GitHub Actions builds.
+Hendy App Store is a Cloudflare-first app storefront and source-to-release studio. It has separate Public Store and Access-gated Admin Studio frontends, an Edge Router, a Backend API, D1/KV/R2/Queues, a restricted source synchronizer, safe and optional LLM-assisted repair, cross-platform build jobs and store-upload workflows.
 
-## Repository map
+## Monorepo layout
 
-- `apps/web-user/`: Public storefront with adaptive mobile and desktop layouts.
-- `apps/web-admin/`: Admin Studio with code paste, directory upload, virtual file tree, diagnostics, safe repair, and GitHub sync.
-- `workers/edge-router/`: Routes public assets, protected Admin UI, and API traffic.
-- `workers/backend-api/`: Cloudflare Access JWT verification, analysis, release listing, R2 artifact uploads, and GitHub commit integration.
-- `workers/self-healing-bot/`: Deterministic allow-listed repairs and build diagnostics. It never executes uploaded code or silently changes arbitrary dependency versions.
-- `.github/workflows/matrix-build.yml`: Windows, Android/Linux, and iOS/macOS build matrix. Native builds run only when their real platform project exists.
-- `.github/workflows/deploy-cloudflare.yml`: Cloudflare-only deployment. No Render deployment configuration remains.
+- `apps/web-user/`: Adaptive public storefront and platform-specific download actions for Android APK, Windows EXE/MSI/ZIP, macOS DMG/PKG/ZIP and iOS OTA manifests.
+- `apps/web-admin/`: Code paste zone, optional Monaco Editor, multi-file/folder uploader, virtual file tree, D1 metadata form, GitHub Actions monitor, build queue request, source analyzer and reviewed AI repair proposals.
+- `packages/shared-types/`: Shared AppData, ReleaseData and BuildLog types.
+- `packages/ui-components/`: Escaping, pill and bytes-format helpers shared by both UIs.
+- `workers/edge-router/`: Public entry, Admin routing and Backend service binding.
+- `workers/backend-api/`: Cloudflare Access JWT verification, D1 app/build records, KV release cache, R2 artifacts/catalog, GitHub Actions dispatch/status and optional LLM repair proposal routes.
+- `workers/alert-notifier/`: HMAC-verified GitHub Actions callback, D1 build-history update and optional Discord notification.
+- `workers/self-healing-bot/`: Deterministic safe repairs and optional LLM-proposed patches.
+- `android/`, `windows/`, `ios/`, `macos/`: Native wrapper projects that point to the public HTTPS storefront.
+- `.github/workflows/matrix-build.yml`: Native build matrix; isolated signing job; publish only verified, signed products to R2.
+- `.github/workflows/store-release.yml`: Manual gated upload to Google Play or App Store Connect/TestFlight.
+- `.github/workflows/deploy-cloudflare.yml`: Provision and deploy R2, Pages, D1, KV, Queues, API Worker, Alert Worker and Edge Router. No Render deployment code remains.
 
-## Local development
+## Local checks
 
-Requires Node.js 22 or later.
+Requires Node.js 22+.
 
 ```bash
-npm install
 npm run validate
 npm test
 npm run build
@@ -25,45 +29,54 @@ npm run heal:check
 npm run dev
 ```
 
-Open `http://127.0.0.1:4173` for the local public UI. Local preview does not emulate Cloudflare Access or the backend API.
+Local preview on `http://127.0.0.1:4173` serves the frontends only; it does not emulate Cloudflare Access, the API Worker, R2, Queues or real store APIs.
 
-## GitHub Actions configuration
+## GitHub repository Secrets and Variables
 
-Set in **GitHub → Settings → Secrets and variables → Actions**:
+Set these under **Settings → Secrets and variables → Actions**:
 
 | Name | Type | Purpose |
-| --- | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Secret | Scoped token for Workers, Pages, R2 |
-| `CLOUDFLARE_ACCOUNT_ID` | Variable or Secret | Cloudflare account ID |
-| `CF_ACCESS_TEAM_DOMAIN` | Variable or Secret | Access team hostname, e.g. `team-name.cloudflareaccess.com` |
-| `CF_ACCESS_AUD` | Variable or Secret | Comma-separated AUD tags for every Access application protecting Admin UI/API routes |
-| `CF_ACCESS_ADMIN_EMAILS` | Variable or Secret | Comma-separated allow-list of administrator emails |
-| `GITHUB_SYNC_TOKEN` | Secret | Fine-grained GitHub token with Contents: Read/Write for this repository |
-| `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD` | Optional Secrets | Authenticode PFX and password |
-| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Optional Secrets | Android signing credentials |
-| `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `IOS_PROVISION_PROFILE_BASE64`, `IOS_SIGNING_IDENTITY` | Optional Secrets | iOS signing assets |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | Secret | Workers, Pages, R2, D1, KV and Queues permissions |
+| `CLOUDFLARE_ACCOUNT_ID` | Variable or Secret | 32-hex Cloudflare account ID |
+| `CF_ACCESS_TEAM_DOMAIN` | Variable or Secret | Access team host, e.g. `team-name.cloudflareaccess.com` |
+| `CF_ACCESS_AUD` | Variable or Secret | Comma-separated AUD tags used by the Access applications |
+| `CF_ACCESS_ADMIN_EMAILS` | Variable or Secret | Comma-separated Admin email allow-list |
+| `GITHUB_SYNC_TOKEN` | Secret | Fine-grained token with repository Contents read/write and Actions read/write for build dispatch |
+| `LLM_API_KEY` | Optional Secret | Enables AI repair proposals; omitted by default |
+| `AUTO_HEAL_ENABLED` | Variable or Secret | Set to `true` only after reviewing the automated source-sync policy |
+| `BUILD_STATUS_WEBHOOK_SECRET` | Optional Secret | HMAC secret shared by the build-status callback and Alert Worker |
+| `BUILD_STATUS_WEBHOOK_URL` | Optional Secret | Deployed Alert Worker URL ending in `/webhooks/github/build-status` |
+| `DISCORD_WEBHOOK_URL` | Optional Secret | Discord build alerts |
+| `ALLOWED_ORIGINS` | Variable | Comma-separated Pages/custom origins allowed by API CORS |
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Optional Secrets | Android signing |
+| `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD` | Optional Secrets | Authenticode signing |
+| `IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `IOS_PROVISION_PROFILE_BASE64`, `IOS_SIGNING_IDENTITY` | Optional Secrets | iOS signing |
+| `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_SPECIFIC_PASSWORD` | Optional Secrets | Developer ID signing and optional notarization |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Optional Secret in `store-release` | Google Play upload |
+| `ASC_API_KEY_ID`, `ASC_API_ISSUER_ID`, `ASC_API_PRIVATE_KEY_BASE64` | Optional Secrets in `store-release` | App Store Connect upload |
+| `ANDROID_PACKAGE_NAME`, `IOS_APP_IDENTIFIER` | Variables | Developer-portal application identifiers |
 
-Configure the GitHub **`cloudflare-production`** environment with required reviewers before adding deployment secrets. Configure **`release-signing`** with required reviewers and environment-scoped signing secrets. Build jobs do not receive signing keys; signing jobs do not check out or execute source code. A manual matrix run with `publish_signed=true` signs only real build products and uploads only signature-verified artifacts to R2.
+Configure GitHub environments `cloudflare-production`, `release-signing`, and `store-release` with required reviewers before adding production credentials. For Cloudflare, grant only the resource permissions required by the workflow. Never put key material, access tokens, or service-account JSON into the repository.
 
-## Cloudflare setup and access policy
+## Cloudflare Access and routing
 
-The deploy workflow provisions the R2 bucket `hendy-app-store-releases`, Pages project `hendy-app-store`, API Worker `hendy-app-store-api`, and Edge Router `hendy-app-store-edge`.
+The provisioning workflow generates these endpoints on a `workers.dev` subdomain:
+- Public storefront: `https://hendy-app-store.pages.dev`
+- Edge/Admin entry: `https://hendy-app-store-edge.<workers-subdomain>.workers.dev/admin`
+- Backend API: `https://hendy-app-store-api.<workers-subdomain>.workers.dev`
+- Alerts: `https://hendy-app-store-alerts.<workers-subdomain>.workers.dev/webhooks/github/build-status`
 
-1. Enable a `workers.dev` subdomain in Cloudflare if the account does not already have one.
-2. Create Cloudflare Access applications/policies on the Edge Router hostname for `/admin*`, `/web-admin/*`, and `/api/*`; allow only the approved admin emails. Put each application's AUD tag into `CF_ACCESS_AUD`, comma-separated. The Worker refuses Admin requests when Access is missing or invalid.
-3. Optionally attach a custom admin hostname to the Edge Router and set Worker variable `ADMIN_HOSTNAMES` to that hostname. The public storefront is deployed separately at `https://hendy-app-store.pages.dev`.
-4. If using a custom Pages domain, add it to the API Worker `ALLOWED_ORIGINS` variable.
+After the first deploy, configure Cloudflare Zero Trust Access applications/policies for the Edge hostname and protect `/admin*`, `/web-admin/*`, and privileged `/api/*` paths. Allow only approved identities. The backend independently validates the Access JWT's RS256 signature, issuer, expiration, audience and email allow-list. Keep the Pages origin in `ALLOWED_ORIGINS`; add trusted custom domains there as needed.
 
-The deployment workflow fails closed if Cloudflare account credentials or Access allow-list configuration is missing. Do not put account tokens, GitHub tokens, signing keys, or passwords in source files.
+## Source ingestion and self-healing
 
-## Source intake and self-healing
+Admin uploads are treated as text data and are never executed by the API. The backend rejects path traversal, key/certificate/environment files, excessive file counts and oversized payloads. Source sync blocks `.github/workflows/` paths and credentials. Safe repair normalizes JSON/line endings and ignore rules. The optional LLM analyzer returns patches constrained to the uploaded source file list; Admin must review and explicitly apply a proposal before syncing it. Automatic LLM commits require `AUTO_HEAL_ENABLED=true` in Worker secrets and the route's explicit `apply` flag.
 
-The Admin Studio supports code paste, multi-file upload, recursive directory drop, and a virtual directory tree. The Backend API validates path traversal, limits file count/size, rejects credentials and private-key extensions, and never runs uploaded source. Safe repair normalizes JSON, enforces a Node.js engine range where relevant, normalizes line endings, and adds safe ignore rules. Dependency conflicts are reported rather than "fixed" by blindly upgrading packages.
+## Build and release workflow
 
-GitHub source sync commits approved project paths via the Git Data API. It blocks workflow edits and credential files; a push starts the normal CI/matrix workflow.
+The matrix builds Android APK/AAB on Ubuntu, Windows EXE on Windows 2025, iOS IPA input on macOS, and a macOS DMG. Signing is separated from source build jobs. Only signature-verified products enter the `signed-build-*` artifacts and R2 public catalog. If a signing secret is missing, the job does not create a public catalog entry for an unsigned product.
 
-## Matrix builds and signing
+To build, open **Actions → Hendy App Store — Multi-OS Build Matrix**, run it manually, and set `publish_signed=true` only after signing secrets and the `release-signing` environment are configured. For Google Play or App Store Connect/TestFlight, run **Publish Hendy App Store to Google Play / App Store Connect** and select the successful matrix run ID containing the signed artifact. Developer portals, package IDs, store metadata, entitlements, certificates and approvals must be valid; CI cannot bypass vendor review requirements.
 
-The matrix runs on `ubuntu-latest` (Android), `windows-latest` (Windows), and `macos-latest` (iOS). If a real native project is missing, it writes a diagnostic instead of fabricating an APK/EXE/IPA. On manual release, the protected signing environment signs a real build product where the needed platform project and credentials are present. Verified signed artifacts and SHA-256 catalog entries can be published to R2.
-
-The backend upload endpoint calculates SHA-256 but does not claim to verify platform signatures. R2 object publication from the matrix is only done after platform signing tools successfully verify the artifact.
+The current native projects are launchers for the HTTPS storefront. They create genuine build artifacts when their toolchains are available, but they are not substitutes for a fully featured native app product or required developer-account configuration.

@@ -182,8 +182,8 @@ async function getBuildStatus(env) {
       for (const item of result.workflow_runs || []) {
         const conclusion = item.conclusion || item.status || "unknown";
         builds.push({
-          id: String(item.id), runId: item.id, workflow: item.name,
-          platform: "matrix", status: conclusion === "failure" ? "failed" : conclusion,
+          id: String(item.id), runId: item.id, workflow: item.name, platform: "matrix",
+          status: conclusion === "failure" ? "failed" : conclusion,
           commitSha: item.head_sha, headSha: item.head_sha, createdAt: item.created_at,
           startedAt: item.run_started_at || item.created_at, completedAt: item.updated_at,
           htmlUrl: item.html_url, event: item.event
@@ -191,20 +191,29 @@ async function getBuildStatus(env) {
       }
     } catch { /* fall back to D1 history */ }
   }
-  if (!builds.length && env.DB) {
+  if (env.DB) {
     const result = await env.DB.prepare("SELECT id, run_id AS runId, workflow, platform, status, commit_sha AS commitSha, created_at AS createdAt, started_at AS startedAt, completed_at AS completedAt, html_url AS htmlUrl, error_message AS errorMessage FROM build_history ORDER BY created_at DESC LIMIT 25").all();
-    return result.results || [];
+    const seen = new Set(builds.map((item) => String(item.id)));
+    for (const item of result.results || []) if (!seen.has(String(item.id))) builds.push(item);
   }
-  return builds;
+  builds.sort((a,b) => String(b.createdAt || b.startedAt || "").localeCompare(String(a.createdAt || a.startedAt || "")));
+  return builds.slice(0, 25);
 }
+
 async function saveApp(body, auth, env) {
   if (!env.DB) throw new Error("D1 database binding is missing.");
   const app = normalizeAppMetadata(body);
   const now = new Date().toISOString();
-  const current = await env.DB.prepare("SELECT created_at FROM apps WHERE id = ? OR slug = ? LIMIT 1").bind(app.id, app.slug).first();
+  const current = await env.DB.prepare("SELECT id, created_at FROM apps WHERE id = ? OR slug = ? LIMIT 1").bind(app.id, app.slug).first();
+  if (current?.id && !body.id) app.id = current.id;
   await env.DB.prepare("INSERT INTO apps (id, slug, name, description, category, icon_url, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET slug=excluded.slug, name=excluded.name, description=excluded.description, category=excluded.category, icon_url=excluded.icon_url, visibility=excluded.visibility, updated_at=excluded.updated_at")
     .bind(app.id, app.slug, app.name, app.description, app.category, app.iconUrl, app.visibility, current?.created_at || now, now).run();
   return { ...app, createdAt: current?.created_at || now, updatedAt: now, updatedBy: auth.email };
+}
+async function listPublicApps(env) {
+  if (!env.DB) return json({ success: true, apps: [], storageReady: false });
+  const result = await env.DB.prepare("SELECT id, slug, name, description, category, icon_url AS iconUrl, visibility, created_at AS createdAt, updated_at AS updatedAt FROM apps WHERE visibility='public' ORDER BY updated_at DESC LIMIT 500").all();
+  return json({ success: true, apps: result.results || [], storageReady: true });
 }
 async function listApps(env) {
   if (!env.DB) return json({ success: false, error: "d1_not_configured", apps: [] }, 503);
@@ -229,7 +238,8 @@ async function dispatchBuildToGitHub(message, env) {
   const owner = String(env.GITHUB_OWNER || "");
   const repo = String(env.GITHUB_REPO || "");
   const ref = String(message.sourceRef || env.GITHUB_BRANCH || "main");
-  const target = String(message.platform || "matrix");
+  const requestedTarget = String(message.platform || "matrix");
+  const target = requestedTarget === "matrix" ? "all" : requestedTarget;
   const result = await githubApi("/actions/workflows/matrix-build.yml/dispatches", env, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -251,6 +261,7 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/health") return json({ success: true, service: "hendy-app-store-api", status: "healthy", time: new Date().toISOString() });
   if (request.method === "GET" && path === "/api/runtime/readiness") return json({ success: true, service: "hendy-app-store-api", bindings: { D1: !!env.DB, KV: !!env.CONFIG_CACHE, R2: !!env.RELEASES_BUCKET, Queue: !!env.BUILD_QUEUE, GitHubSync: !!env.GITHUB_SYNC_TOKEN } });
   if (request.method === "GET" && path === "/api/releases") return listReleases(env, request);
+  if (request.method === "GET" && path === "/api/apps") return listPublicApps(env);
   if (request.method === "GET" && path === "/api/releases/ios-manifest") return iosManifest(url, env, request);
   if (request.method === "GET" && path === "/api/download") return downloadRelease(url, env);
 

@@ -1,0 +1,12 @@
+name = "hendy-app-store-alerts"
+main = "./src/index.js"
+compatibility_date = "2026-10-25"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hendy-app-store-db"
+database_id = "__D1_DATABASE_ID__"
+
+[vars]
+DISCORD_WEBHOOK_URL = ""

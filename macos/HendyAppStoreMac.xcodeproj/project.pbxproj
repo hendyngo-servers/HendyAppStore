@@ -1,0 +1,28 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 56;
+ objects = {
+  B10000000000000000000001 = {isa = PBXBuildFile; fileRef = B20000000000000000000001; };
+  B10000000000000000000002 = {isa = PBXBuildFile; fileRef = B20000000000000000000002; };
+  B20000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+  B20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+  B20000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HendyAppStoreMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+  B30000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  B30000000000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  B30000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000000000000000000001, B10000000000000000000002, ); runOnlyForDeploymentPostprocessing = 0; };
+  B40000000000000000000001 = {isa = PBXGroup; children = (B40000000000000000000002, B40000000000000000000003, ); sourceTree = "<group>"; };
+  B40000000000000000000002 = {isa = PBXGroup; children = (B20000000000000000000001, B20000000000000000000002, ); path = Sources; sourceTree = "<group>"; };
+  B40000000000000000000003 = {isa = PBXGroup; children = (B20000000000000000000003, ); name = Products; sourceTree = "<group>"; };
+  B50000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B90000000000000000000002; buildPhases = (B30000000000000000000003, B30000000000000000000001, B30000000000000000000002, ); buildRules = (); dependencies = (); name = HendyAppStoreMac; productName = HendyAppStoreMac; productReference = B20000000000000000000003; productType = "com.apple.product-type.application"; };
+  B60000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = {B50000000000000000000001 = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = B90000000000000000000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = B40000000000000000000001; productRefGroup = B40000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (B50000000000000000000001, ); };
+  B90000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (B70000000000000000000001, B70000000000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+  B90000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (B70000000000000000000003, B70000000000000000000004, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+  B70000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Debug; };
+  B70000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Release; };
+  B70000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "Hendy App Store"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities"; MACOSX_DEPLOYMENT_TARGET = 13.0; PRODUCT_BUNDLE_IDENTIFIER = com.hendy.appstore.mac; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 5.0; }; name = Debug; };
+  B70000000000000000000004 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "Hendy App Store"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities"; MACOSX_DEPLOYMENT_TARGET = 13.0; PRODUCT_BUNDLE_IDENTIFIER = com.hendy.appstore.mac; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 5.0; }; name = Release; };
+ };
+ rootObject = B60000000000000000000001;
+}

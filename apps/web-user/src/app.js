@@ -38,16 +38,32 @@ function renderReleases() {
   root.innerHTML = releases.length ? releases.slice(0, 8).map((r) => `<article class="release-row"><div class="release-badge">${escapeHtml(r.platform.slice(0,3).toUpperCase())}</div><div class="release-summary"><strong>${escapeHtml(r.name)}</strong><span>${escapeHtml(r.version)} · ${escapeHtml(r.platform)}</span></div><div class="release-end"><span>${escapeHtml(r.updatedAt || "Ngày phát hành chưa có")}</span>${r.downloadUrl ? renderPlatformDownloadActions(r, API_BASE) : '<span class="disabled-note">Đang chuẩn bị</span>'}</div></article>`).join("") : '<article class="empty-state">Chưa có bản phát hành công khai.</article>';
 }
 async function loadReleases() {
+  const [releaseResult, appResult] = await Promise.allSettled([
+    fetch(`${API_BASE}/releases`, { headers: { Accept: "application/json" } }),
+    fetch(`${API_BASE}/apps`, { headers: { Accept: "application/json" } })
+  ]);
+  const items = [];
+  let connected = false;
   try {
-    const response = await fetch(`${API_BASE}/releases`, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`API trả về HTTP ${response.status}`);
-    const payload = await response.json();
-    releases = (Array.isArray(payload.releases) ? payload.releases : []).map(normalizeRelease);
-    showStatus("API đã kết nối");
-  } catch (error) {
-    releases = []; showStatus("Chưa kết nối được API", false);
-    console.warn("Hendy Store API unavailable:", error.message);
-  }
+    if (releaseResult.status === "fulfilled" && releaseResult.value.ok) {
+      const payload = await releaseResult.value.json();
+      items.push(...(Array.isArray(payload.releases) ? payload.releases : []).map(normalizeRelease));
+      connected = true;
+    }
+  } catch (error) { console.warn("Release catalog could not be parsed:", error.message); }
+  try {
+    if (appResult.status === "fulfilled" && appResult.value.ok) {
+      const payload = await appResult.value.json();
+      const apps = (Array.isArray(payload.apps) ? payload.apps : []).map((app) => normalizeRelease({
+        ...app, appName: app.name, platform: "web", version: "Metadata", filename: "", downloadUrl: "",
+        description: app.description || "Ứng dụng được quản lý trong Hendy Store"
+      }));
+      items.push(...apps);
+      connected = true;
+    }
+  } catch (error) { console.warn("App metadata could not be parsed:", error.message); }
+  releases = items;
+  showStatus(connected ? "API đã kết nối" : "Chưa kết nối được API", connected);
   renderCatalog(); renderReleases();
 }
 $("#search").addEventListener("input", (event) => {

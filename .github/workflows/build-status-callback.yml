@@ -1,0 +1,67 @@
+name: Notify Hendy Admin about Matrix Build Status
+
+on:
+  workflow_run:
+    workflows: ["Hendy App Store — Multi-OS Build Matrix"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Optional workflow run ID for testing a callback"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  callback:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post signed build status callback
+        env:
+          BUILD_STATUS_WEBHOOK_URL: ${{ secrets.BUILD_STATUS_WEBHOOK_URL }}
+          BUILD_STATUS_WEBHOOK_SECRET: ${{ secrets.BUILD_STATUS_WEBHOOK_SECRET }}
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+          RUN_STATUS: ${{ github.event.workflow_run.status || 'completed' }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'unknown' }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url || github.server_url }}
+          RUN_STARTED_AT: ${{ github.event.workflow_run.run_started_at || '' }}
+          RUN_UPDATED_AT: ${{ github.event.workflow_run.updated_at || github.event.repository.updated_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${BUILD_STATUS_WEBHOOK_URL:-}" ] || [ -z "${BUILD_STATUS_WEBHOOK_SECRET:-}" ]; then
+            echo "::warning::Build status callback is not configured. Set BUILD_STATUS_WEBHOOK_URL and BUILD_STATUS_WEBHOOK_SECRET after deploying the alert Worker."
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import { createHmac } from "node:crypto";
+          const data = {
+            workflow: { name: "Hendy App Store — Multi-OS Build Matrix" },
+            workflow_run: {
+              id: Number(process.env.RUN_ID || 0),
+              status: process.env.RUN_STATUS,
+              conclusion: process.env.RUN_CONCLUSION,
+              head_sha: process.env.RUN_SHA,
+              head_branch: process.env.RUN_BRANCH,
+              html_url: process.env.RUN_URL,
+              run_started_at: process.env.RUN_STARTED_AT || null,
+              updated_at: process.env.RUN_UPDATED_AT || new Date().toISOString()
+            }
+          };
+          const body = JSON.stringify(data);
+          const signature = "sha256=" + createHmac("sha256", process.env.BUILD_STATUS_WEBHOOK_SECRET).update(body).digest("hex");
+          const response = await fetch(process.env.BUILD_STATUS_WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-hendy-signature-256": signature },
+            body
+          });
+          if (!response.ok) throw new Error("Build status callback failed with HTTP " + response.status + ": " + (await response.text()).slice(0, 500));
+          console.log("Build status saved to Admin backend.");
+          NODE

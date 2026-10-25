@@ -1,0 +1,119 @@
+name: Publish Hendy App Store to Google Play / App Store Connect
+
+on:
+  workflow_dispatch:
+    inputs:
+      matrix_run_id:
+        description: "GitHub Actions run ID containing signed-build-android or signed-build-ios artifacts"
+        required: true
+        type: string
+      platform:
+        description: "Target store"
+        required: true
+        type: choice
+        options: [android, ios]
+      play_track:
+        description: "Google Play release track (Android only)"
+        required: true
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      submit_for_review:
+        description: "For iOS, submit the uploaded build for App Store review instead of TestFlight-only upload"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.platform }} store release
+    runs-on: ${{ inputs.platform == 'ios' && 'macos-latest' || 'ubuntu-latest' }}
+    environment: store-release
+    timeout-minutes: 45
+    steps:
+      - name: Download signed build artifacts from the selected matrix run
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-build-${{ inputs.platform }}
+          run-id: ${{ inputs.matrix_run_id }}
+          github-token: ${{ github.token }}
+          path: release-input
+      - name: Validate artifact exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.platform }}" = "android" ]; then
+            test -s release-input/android.aab || { echo "::error::Signed AAB not found. Run matrix-build.yml with publish_signed=true and valid Android signing secrets."; exit 1; }
+          else
+            test -s release-input/ios.ipa || { echo "::error::Signed IPA not found. Run matrix-build.yml with publish_signed=true and valid iOS signing secrets."; exit 1; }
+          fi
+      - name: Setup Ruby and Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - name: Install Fastlane
+        run: gem install fastlane --no-document
+      - name: Publish Android AAB to Google Play
+        if: inputs.platform == 'android'
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME || 'com.hendy.appstore' }}
+          GOOGLE_PLAY_TRACK: ${{ inputs.play_track }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:-}" || { echo "::error::Configure GOOGLE_PLAY_SERVICE_ACCOUNT_JSON in the store-release environment."; exit 1; }
+          fastlane supply             --aab release-input/android.aab             --track "$GOOGLE_PLAY_TRACK"             --json_key_data "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"             --package_name "$ANDROID_PACKAGE_NAME"             --skip_upload_metadata true             --skip_upload_images true             --skip_upload_screenshots true             --release_status completed
+      - name: Prepare App Store Connect API key
+        if: inputs.platform == 'ios'
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_PRIVATE_KEY_BASE64: ${{ secrets.ASC_API_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "${ASC_API_KEY_ID:-}" || { echo "::error::Configure ASC_API_KEY_ID."; exit 1; }
+          test -n "${ASC_API_ISSUER_ID:-}" || { echo "::error::Configure ASC_API_ISSUER_ID."; exit 1; }
+          test -n "${ASC_API_PRIVATE_KEY_BASE64:-}" || { echo "::error::Configure ASC_API_PRIVATE_KEY_BASE64."; exit 1; }
+          mkdir -p .fastlane
+          printf '%s' "$ASC_API_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          export ASC_API_KEY_ID ASC_API_ISSUER_ID
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const key = readFileSync(process.env.RUNNER_TEMP + "/AuthKey.p8", "utf8");
+          writeFileSync(".fastlane/app-store-connect-key.json", JSON.stringify({
+            key_id: process.env.ASC_API_KEY_ID,
+            issuer_id: process.env.ASC_API_ISSUER_ID,
+            key: key,
+            in_house: false
+          }));
+          NODE
+      - name: Upload iOS build to App Store Connect for review
+        if: inputs.platform == 'ios' && inputs.submit_for_review == true
+        env:
+          IOS_APP_IDENTIFIER: ${{ vars.IOS_APP_IDENTIFIER || 'com.hendy.appstore.ios' }}
+        run: |
+          set -euo pipefail
+          fastlane deliver             --ipa release-input/ios.ipa             --api_key_path .fastlane/app-store-connect-key.json             --app_identifier "$IOS_APP_IDENTIFIER"             --skip_metadata true             --skip_screenshots true             --submit_for_review true             --automatic_release false
+      - name: Upload iOS build to TestFlight
+        if: inputs.platform == 'ios' && inputs.submit_for_review == false
+        env:
+          IOS_APP_IDENTIFIER: ${{ vars.IOS_APP_IDENTIFIER || 'com.hendy.appstore.ios' }}
+        run: |
+          set -euo pipefail
+          fastlane pilot upload             --ipa release-input/ios.ipa             --api_key_path .fastlane/app-store-connect-key.json             --app_identifier "$IOS_APP_IDENTIFIER"
+      - name: Store upload summary
+        if: always()
+        run: |
+          {
+            echo "### Store release workflow"
+            echo
+            echo "- Platform: ${{ inputs.platform }}"
+            echo "- Matrix build run: ${{ inputs.matrix_run_id }}"
+            echo "- Result: ${{ job.status }}"
+            echo "- Native signing and store credentials must match the app identifiers configured in the developer portals."
+          } >> "$GITHUB_STEP_SUMMARY"

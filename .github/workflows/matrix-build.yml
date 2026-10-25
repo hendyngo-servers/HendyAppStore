@@ -62,7 +62,7 @@ jobs:
           - target: android
             runner: ubuntu-latest
           - target: windows
-            runner: windows-latest
+            runner: windows-2025
           - target: ios
             runner: macos-latest
           - target: macos
@@ -163,7 +163,7 @@ jobs:
           - target: android
             runner: ubuntu-latest
           - target: windows
-            runner: windows-latest
+            runner: windows-2025
           - target: ios
             runner: macos-latest
           - target: macos

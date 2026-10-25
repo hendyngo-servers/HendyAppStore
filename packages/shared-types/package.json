@@ -1,0 +1,9 @@
+{
+  "name": "@hendy/shared-types",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./types": "./src/index.d.ts"
+  }
+}

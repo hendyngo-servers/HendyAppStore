@@ -3,10 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "validate": "node scripts/validate-structure.mjs",
-    "test": "node --test tests/self-healing.test.mjs tests/github-sync.test.mjs tests/access.test.mjs",
+    "test": "node --test tests/access.test.mjs tests/github-sync.test.mjs tests/self-healing.test.mjs tests/shared-types.test.mjs tests/platform-downloads.test.mjs tests/schema.test.mjs",
     "build": "node scripts/build.mjs",
     "heal:check": "node workers/self-healing-bot/src/index.js --check",
     "heal:repair": "node workers/self-healing-bot/src/index.js --repair",

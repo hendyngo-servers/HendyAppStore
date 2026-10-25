@@ -1,0 +1,9 @@
+{
+  "name": "@hendy/web-admin",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Access-gated Admin Studio frontend",
+  "scripts": {
+    "check": "node --check src/app.js"
+  }
+}

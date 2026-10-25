@@ -1,2 +1,2 @@
-import { mountAdminStudio } from "./app.js";
+import { mountAdminStudio } from "./App.js";
 mountAdminStudio(document.querySelector("#admin-root"));

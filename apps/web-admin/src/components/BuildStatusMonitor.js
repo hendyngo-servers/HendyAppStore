@@ -1,0 +1,9 @@
+import { escapeHtml } from "../../../../packages/ui-components/src/index.js";
+const statusTone = (status) => ({success:"success",failed:"danger",failure:"danger",running:"info",in_progress:"info",queued:"warning",cancelled:"neutral",skipped:"neutral"})[String(status || "").toLowerCase()] || "neutral";
+export function buildStatusMonitor() {
+  return `<section id="build-monitor" class="panel build-monitor"><div class="panel-heading"><div><p class="eyebrow">05 / MATRIX BUILD ENGINE</p><h2>Trạng thái Build</h2></div><div class="build-actions"><button id="request-build" class="button primary" type="button">Yêu cầu Build</button><button id="refresh-builds" class="button secondary" type="button">Làm mới</button></div></div><p class="panel-hint">Theo dõi GitHub Actions build trên Linux, Windows, macOS. Nút Build gửi lệnh qua Cloudflare Queues.</p><div id="build-request-output" class="sync-output" aria-live="polite"></div><div id="build-status-list" class="build-status-list"><div class="tree-empty">Đang tải build gần nhất…</div></div></section>`;
+}
+export function renderBuildRows(builds = []) {
+  if (!Array.isArray(builds) || !builds.length) return '<div class="tree-empty">Chưa có lịch sử build được ghi nhận.</div>';
+  return builds.slice(0, 12).map((b) => `<article class="build-row"><div class="build-state build-state--${statusTone(b.status)}"></div><div class="build-main"><strong>${escapeHtml(b.workflow || b.name || "Matrix Build")}</strong><span>${escapeHtml(b.platform || b.event || "matrix")} · ${escapeHtml((b.commitSha || b.headSha || "").slice(0,8))}</span><small>${escapeHtml(b.startedAt || b.createdAt || "")}</small></div><span class="hendy-pill hendy-pill--${statusTone(b.status)}">${escapeHtml(b.status || "unknown")}</span>${b.htmlUrl ? `<a href="${escapeHtml(b.htmlUrl)}" target="_blank" rel="noopener noreferrer" class="build-link">Logs ↗</a>` : ""}</article>`).join("");
+}

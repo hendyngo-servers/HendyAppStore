@@ -9,7 +9,34 @@ GITHUB_REPO = "HendyAppStore"
 GITHUB_BRANCH = "main"
 ALLOWED_ORIGINS = "https://hendy-app-store.pages.dev"
 PUBLIC_API_BASE_URL = ""
+LLM_API_BASE_URL = "https://api.openai.com/v1/chat/completions"
+LLM_MODEL = "gpt-4.1-mini"
+AUTO_HEAL_ENABLED = "false"
+IOS_BUNDLE_IDENTIFIER = "com.hendy.appstore.ios"
 
 [[r2_buckets]]
 binding = "RELEASES_BUCKET"
 bucket_name = "hendy-app-store-releases"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hendy-app-store-db"
+database_id = "__D1_DATABASE_ID__"
+
+[[kv_namespaces]]
+binding = "CONFIG_CACHE"
+id = "__KV_NAMESPACE_ID__"
+
+[[queues.producers]]
+binding = "BUILD_QUEUE"
+queue = "hendy-app-store-builds"
+
+[[queues.producers]]
+binding = "BUILD_DLQ"
+queue = "hendy-app-store-builds-dlq"
+
+[[queues.consumers]]
+queue = "hendy-app-store-builds"
+max_batch_size = 5
+max_retries = 3
+dead_letter_queue = "hendy-app-store-builds-dlq"

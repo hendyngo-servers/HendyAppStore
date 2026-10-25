@@ -1,0 +1,6 @@
+<Application x:Class="HendyAppStore.App" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" StartupUri="MainWindow.xaml">
+  <Application.Resources>
+    <SolidColorBrush x:Key="HendyBackground" Color="#0A1020"/>
+    <SolidColorBrush x:Key="HendyMint" Color="#54E3C2"/>
+  </Application.Resources>
+</Application>

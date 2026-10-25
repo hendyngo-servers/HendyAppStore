@@ -66,11 +66,16 @@ async function loadFiles(fileList) {
   for (const file of fileList) {
     const path = file.webkitRelativePath || file.name;
     try {
-      const normalized = normalizeProjectPath(path);
+      let normalized = normalizeProjectPath(path);
+      const allowedRoots = ["apps/","workers/","packages/","scripts/","tests/","android/","windows/","ios/","macos/","automation/"];
+      const rootFiles = new Set(["README.md","package.json",".gitignore","wrangler.toml","tsconfig.json"]);
+      const parts = normalized.split("/");
+      if (parts.length > 1 && !allowedRoots.some((root) => normalized.startsWith(root)) && !rootFiles.has(parts[0]) && (allowedRoots.some((root) => root.startsWith(parts[1] + "/")) || rootFiles.has(parts[1]))) normalized = parts.slice(1).join("/");
       if (blockedFileName.test(normalized) || file.size > MAX_FILE_BYTES) { skipped++; continue; }
       const text = await file.text();
       if (text.includes("\u0000")) { skipped++; continue; }
-      addFile(normalized.startsWith("apps/") || normalized.startsWith("workers/") ? normalized : `apps/web-user/uploads/${normalized}`, text);
+      const underRoot = allowedRoots.some((root) => normalized.startsWith(root));
+      addFile(underRoot || rootFiles.has(normalized) ? normalized : `apps/web-user/uploads/${normalized}`, text);
       added++;
     } catch (error) { skipped++; }
   }
@@ -237,7 +242,7 @@ async function requestAiPatch() {
     const result = await apiRequest("/api/self-heal/llm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, diagnostics: state.lastReport?.diagnostics || [] }) });
     aiProposal = result;
     $("#apply-ai-patch").disabled = !$("#accept-ai-patch").checked || !result.patches?.length;
-    $("#diagnostic-output").textContent = JSON.stringify({ summary: result.summary, patches: (result.patches || []).map(p => ({ path: p.path, rationale: p.rationale, newCharacters: p.content.length })), note: "Bản vá chưa được áp dụng. Xem xét từng tệp trước khi xác nhận." }, null, 2);
+    $("#diagnostic-output").textContent = JSON.stringify({ summary: result.summary, patches: (result.patches || []).map(p => ({ path: p.path, rationale: p.rationale, newCharacters: p.content.length, preview: p.content.slice(0, 500) })), note: "Bản vá chưa được áp dụng. Xem xét từng tệp trước khi xác nhận." }, null, 2);
     setNotice("#diagnostic-output", `AI đề xuất ${result.patches?.length || 0} bản vá. Bản vá vẫn cần được kiểm tra trước khi áp dụng.`);
   } catch (error) {
     aiProposal = null;

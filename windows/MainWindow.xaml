@@ -1,0 +1,26 @@
+<Window x:Class="HendyAppStore.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Hendy App Store" Height="420" Width="680" MinHeight="360" MinWidth="520"
+        Background="{StaticResource HendyBackground}" Foreground="#EDF3FF" WindowStartupLocation="CenterScreen">
+    <Grid Margin="32">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <Border Background="{StaticResource HendyMint}" CornerRadius="10" Width="44" Height="44">
+                <TextBlock Text="H" Foreground="#081322" FontSize="26" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Hendy App Store" FontSize="24" FontWeight="Bold"/>
+                <TextBlock Text="Windows desktop launcher" Foreground="#94A8C6" FontSize="12" Margin="0,3,0,0"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="0,20">
+            <TextBlock Text="Quản lý bản phát hành phần mềm từ một cổng duy nhất." FontSize="17" TextWrapping="Wrap" Margin="0,0,0,12"/>
+            <TextBlock Text="Ứng dụng này mở cửa hàng web qua HTTPS. Tệp tải về và thông tin phiên bản đến từ API phát hành; launcher không yêu cầu quyền quản trị Windows." Foreground="#94A8C6" FontSize="13" TextWrapping="Wrap" LineHeight="21"/>
+        </StackPanel>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button Content="Mở Hendy Store ↗" Click="OpenStore_Click" Padding="18,11" Background="{StaticResource HendyMint}" Foreground="#081322" FontWeight="Bold" BorderThickness="0"/>
+            <TextBlock Text="  Không yêu cầu chạy với quyền Administrator." Foreground="#7184A1" VerticalAlignment="Center" FontSize="10"/>
+        </StackPanel>
+    </Grid>
+</Window>
