@@ -1,3 +1,26 @@
+function detectClientFromUserAgent(userAgent = "") {
+  const ua = String(userAgent).toLowerCase();
+  let os = "unknown";
+  if (/iphone|ipad|ipod/.test(ua)) os = "ios";
+  else if (/android/.test(ua)) os = "android";
+  else if (/windows phone|windows nt/.test(ua)) os = "windows";
+  else if (/cros/.test(ua)) os = "chromeos";
+  else if (/macintosh|mac os x/.test(ua)) os = "macos";
+  else if (/linux|x11/.test(ua)) os = "linux";
+  let device = "desktop";
+  if (/ipad|tablet/.test(ua) || (ua.includes("android") && !ua.includes("mobile"))) device = "tablet";
+  else if (/android|iphone|ipod|mobile|windows phone/.test(ua)) device = "mobile";
+  return { os, device };
+}
+function addClientHeaders(headers, request) {
+  const detected = detectClientFromUserAgent(request.headers.get("User-Agent") || "");
+  headers.set("X-Hendy-Client-OS", detected.os);
+  headers.set("X-Hendy-Device-Class", detected.device);
+  const vary = new Set(String(headers.get("Vary") || "").split(",").map((value) => value.trim()).filter(Boolean));
+  vary.add("User-Agent");
+  headers.set("Vary", [...vary].join(", "));
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
@@ -49,6 +72,7 @@ export default {
       headers.set("Referrer-Policy", "same-origin");
       headers.set("X-Frame-Options", "DENY");
       headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net; worker-src blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+      addClientHeaders(headers, request);
       return new Response(response.body, { status: response.status, headers });
     }
 
@@ -64,6 +88,7 @@ export default {
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set("X-Frame-Options", "DENY");
     headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+    addClientHeaders(headers, request);
     return new Response(response.body, { status: response.status, headers });
   }
 };
