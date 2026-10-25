@@ -2,7 +2,7 @@ import { verifyAdminRequest } from "./access.js";
 import { syncFilesToGitHub } from "./github-sync.js";
 import { analyzeProjectFiles } from "../../self-healing-bot/src/index.js";
 import { proposeSafePatches } from "../../self-healing-bot/src/llm-analyzer.js";
-import { normalizeAppMetadata } from "../../../packages/shared-types/src/index.js";
+import { normalizeAppMetadata, normalizeHttpsUrl } from "../../../packages/shared-types/src/index.js";
 
 const API = "https://api.github.com";
 const MAX_BODY = 12 * 1024 * 1024;
@@ -225,20 +225,54 @@ async function getBuildStatus(env) {
   return builds.slice(0, 25);
 }
 
+export function normalizeScreenshotUrls(input) {
+  if (input == null || input === "") return [];
+  if (!Array.isArray(input)) throw new Error("Screenshots must be an array of HTTPS URLs.");
+  if (input.length > 8) throw new Error("A maximum of eight screenshots is allowed per application.");
+  const urls = input.map((item) => normalizeHttpsUrl(typeof item === "string" ? item : item?.url, "Screenshot URL", 1000)).filter(Boolean);
+  return [...new Set(urls)];
+}
+async function attachScreenshots(apps, env) {
+  if (!Array.isArray(apps) || apps.length === 0) return [];
+  if (!env.DB) return apps.map((app) => ({ ...app, screenshots: [] }));
+  const ids = [...new Set(apps.map((app) => String(app.id || "")).filter(Boolean))];
+  if (!ids.length) return apps.map((app) => ({ ...app, screenshots: [] }));
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = await env.DB.prepare(`SELECT app_id AS appId, image_url AS url, caption, position FROM app_screenshots WHERE app_id IN (${placeholders}) ORDER BY app_id, position ASC`).bind(...ids).all();
+  const grouped = new Map();
+  for (const row of rows.results || []) {
+    if (!grouped.has(row.appId)) grouped.set(row.appId, []);
+    grouped.get(row.appId).push({ url: row.url, caption: row.caption || "", position: Number(row.position || 0) });
+  }
+  return apps.map((app) => ({ ...app, screenshots: grouped.get(String(app.id)) || [] }));
+}
 async function saveApp(body, auth, env) {
   if (!env.DB) throw new Error("D1 database binding is missing.");
   const app = normalizeAppMetadata(body);
+  const replaceScreenshots = Array.isArray(body.screenshots);
+  const screenshots = replaceScreenshots ? normalizeScreenshotUrls(body.screenshots) : null;
   const now = new Date().toISOString();
   const current = await env.DB.prepare("SELECT id, created_at FROM apps WHERE id = ? OR slug = ? LIMIT 1").bind(app.id, app.slug).first();
   if (current?.id && !body.id) app.id = current.id;
   await env.DB.prepare("INSERT INTO apps (id, slug, name, description, category, icon_url, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET slug=excluded.slug, name=excluded.name, description=excluded.description, category=excluded.category, icon_url=excluded.icon_url, visibility=excluded.visibility, updated_at=excluded.updated_at")
     .bind(app.id, app.slug, app.name, app.description, app.category, app.iconUrl, app.visibility, current?.created_at || now, now).run();
-  return { ...app, createdAt: current?.created_at || now, updatedAt: now, updatedBy: auth.email };
+
+  if (replaceScreenshots) {
+    await env.DB.prepare("DELETE FROM app_screenshots WHERE app_id = ?").bind(app.id).run();
+    for (let position = 0; position < screenshots.length; position++) {
+      await env.DB.prepare("INSERT INTO app_screenshots (id, app_id, image_url, caption, position, created_at) VALUES (?, ?, ?, '', ?, ?)")
+        .bind(crypto.randomUUID(), app.id, screenshots[position], position, now).run();
+    }
+  }
+
+  const enriched = (await attachScreenshots([{ ...app, createdAt: current?.created_at || now, updatedAt: now }], env))[0];
+  return { ...enriched, updatedBy: auth.email };
 }
 async function listPublicApps(env) {
   if (!env.DB) return json({ success: true, apps: [], storageReady: false });
   const result = await env.DB.prepare("SELECT id, slug, name, description, category, icon_url AS iconUrl, visibility, created_at AS createdAt, updated_at AS updatedAt FROM apps WHERE visibility='public' ORDER BY updated_at DESC LIMIT 500").all();
-  return json({ success: true, apps: result.results || [], storageReady: true });
+  const apps = await attachScreenshots(result.results || [], env);
+  return json({ success: true, apps, storageReady: true });
 }
 async function listAdminReleases(env) {
   if (!env.RELEASES_BUCKET) return json({ success: true, releases: [], storageReady: false });
@@ -260,7 +294,8 @@ async function listAdminReleases(env) {
 async function listApps(env) {
   if (!env.DB) return json({ success: false, error: "d1_not_configured", apps: [] }, 503);
   const result = await env.DB.prepare("SELECT id, slug, name, description, category, icon_url AS iconUrl, visibility, created_at AS createdAt, updated_at AS updatedAt FROM apps ORDER BY updated_at DESC LIMIT 500").all();
-  return json({ success: true, apps: result.results || [] });
+  const apps = await attachScreenshots(result.results || [], env);
+  return json({ success: true, apps });
 }
 async function enqueueBuild(body, auth, env) {
   if (!env.BUILD_QUEUE || !env.DB) throw new Error("D1 and BUILD_QUEUE bindings are required for queued builds.");
