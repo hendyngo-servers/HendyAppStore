@@ -277,7 +277,7 @@ async function getAutomationStatus(token, env) {
     true
   );
 }
-function normalizeAutomationValues(values) {
+export function normalizeAutomationValues(values) {
   if (!values || typeof values !== "object" || Array.isArray(values)) throw new Error("Values must be a JSON object.");
   const unknown = Object.keys(values).filter((name) => !AUTOMATION_FIELD_MAP.has(name));
   if (unknown.length) throw new Error("Unsupported configuration field: " + unknown.slice(0, 3).join(", "));
