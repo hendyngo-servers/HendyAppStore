@@ -12,6 +12,17 @@ CREATE TABLE IF NOT EXISTS apps (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS app_screenshots (
+  id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL,
+  image_url TEXT NOT NULL,
+  caption TEXT NOT NULL DEFAULT '',
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_app_screenshots_app_id ON app_screenshots(app_id, position ASC);
+
 CREATE TABLE IF NOT EXISTS build_history (
   id TEXT PRIMARY KEY,
   run_id INTEGER,
