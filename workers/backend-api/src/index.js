@@ -307,7 +307,7 @@ async function updateAutomationValues(inputValues, env, { deployAfterSync = fals
   const token = String(values.GITHUB_SYNC_TOKEN || env.GITHUB_SYNC_TOKEN || "").trim();
   if (!token) throw new Error("Enter GITHUB_SYNC_TOKEN or configure it as a Worker secret before syncing GitHub Actions values.");
   const entries = Object.entries(values);
-  if (!entries.length) throw new Error("No values were provided. Empty fields are deliberately skipped to avoid overwriting existing settings.");
+  if (!entries.length && !deployAfterSync) throw new Error("No values were provided. To deploy the current configuration only, select the deploy option.");
   const variableEntries = entries.filter(([name]) => AUTOMATION_FIELD_MAP.get(name).kind === "variable");
   const secretEntries = entries.filter(([name]) => AUTOMATION_FIELD_MAP.get(name).kind === "secret");
   let publicKey = null;
