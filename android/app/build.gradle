@@ -5,7 +5,7 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.hendy.appstore"
+        applicationId (System.getenv("ANDROID_PACKAGE_NAME") ?: "com.hendy.appstore")
         minSdk 26
         targetSdk 35
         versionCode 1
