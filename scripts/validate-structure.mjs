@@ -43,7 +43,7 @@ for (const binding of ["RELEASES_BUCKET", "DB", "CONFIG_CACHE", "BUILD_QUEUE"]) 
 const matrix = readFileSync(".github/workflows/matrix-build.yml", "utf8");
 for (const runner of ["ubuntu-latest", "windows-2025", "macos-latest"]) assert.ok(matrix.includes(runner), "Matrix runner missing: " + runner);
 assert.ok(matrix.includes("detect-targets") && matrix.includes("fromJson(needs.detect-targets.outputs.matrix)"), "Dynamic target matrix is missing.");
-assert.equal(/render\\.com/i.test(matrix), false, "Render deployment must remain removed.");
+assert.equal(/render[.]com/i.test(matrix), false, "Render deployment must remain removed.");
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 for (const dependency of ["libsodium-wrappers-sumo", "react", "react-dom"]) assert.ok(manifest.dependencies?.[dependency], "Root dependency missing: " + dependency);
 assert.ok(manifest.devDependencies?.esbuild, "esbuild is required to bundle the React Admin panels.");
