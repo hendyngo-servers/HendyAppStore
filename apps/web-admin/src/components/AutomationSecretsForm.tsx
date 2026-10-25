@@ -5,7 +5,7 @@ type FieldKind = "secret" | "variable";
 type FieldGroup = "Security & network" | "Automation & webhooks" | "Android signing" | "iOS signing" | "macOS signing" | "Apple account" | "Windows signing";
 type Field = { name: string; label: string; kind: FieldKind; group: FieldGroup; hint: string; multiline?: boolean };
 type SecretStatus = { name: string; kind: FieldKind; configured: boolean };
-type StatusResponse = { success: boolean; statuses?: SecretStatus[]; callbackUrlConfigured?: boolean; requiresToken?: boolean; error?: string };
+type StatusResponse = { success: boolean; statuses?: SecretStatus[]; callbackUrlConfigured?: boolean; requiresToken?: boolean; error?: string; deployment?: { requested?: boolean; triggered?: boolean; actionsUrl?: string; error?: string } };
 type Values = Record<string, string>;
 
 export const AUTOMATION_FIELDS: Field[] = [
@@ -48,6 +48,8 @@ export function AutomationSecretsForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastSync, setLastSync] = useState("");
+  const [deployAfterSync, setDeployAfterSync] = useState(false);
+  const [deploymentUrl, setDeploymentUrl] = useState("");
   const [certificateResetKey, setCertificateResetKey] = useState(0);
 
   const statusMap = useMemo(() => new Map(statuses.map((s) => [s.name, s])), [statuses]);
@@ -88,8 +90,8 @@ export function AutomationSecretsForm() {
       const value = String(values[field.name] ?? "");
       if (value.trim() !== "") payload[field.name] = value;
     }
-    if (Object.keys(payload).length === 0) {
-      setError("Nhập ít nhất một giá trị; trường trống được hiểu là giữ nguyên cấu hình hiện có.");
+    if (Object.keys(payload).length === 0 && !deployAfterSync) {
+      setError("Nhập ít nhất một giá trị hoặc bật tùy chọn triển khai cấu hình hiện tại.");
       return;
     }
     setBusy(true);
@@ -100,7 +102,7 @@ export function AutomationSecretsForm() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ values: payload })
+        body: JSON.stringify({ values: payload, deployAfterSync })
       });
       const data = await response.json().catch(() => ({})) as StatusResponse & { updated?: string[]; skipped?: string[] };
       if (!response.ok) throw new Error(data.error || `Sync API returned HTTP ${response.status}`);
@@ -108,6 +110,7 @@ export function AutomationSecretsForm() {
       setCallbackUrlConfigured(Boolean(data.callbackUrlConfigured));
       setStatusAvailable(true);
       setLastSync(new Date().toLocaleString());
+      setDeploymentUrl(data.deployment?.actionsUrl || "");
       setValues({ ...EMPTY_VALUES });
       setCertificateResetKey((key) => key + 1);
       setMessage(`Đồng bộ xong: ${(data.updated || []).length} mục cập nhật; ${(data.skipped || []).length} mục trống được giữ nguyên. Giá trị secrets không được trả về trình duyệt.`);
@@ -126,6 +129,7 @@ export function AutomationSecretsForm() {
       <button className="button secondary" type="button" onClick={() => void refreshStatuses()} disabled={busy}>Làm mới trạng thái</button>
     </div>
     <div className="automation-notice" role="status">{message}</div>
+    {deploymentUrl && <p className="automation-deploy-link"><a href={deploymentUrl} target="_blank" rel="noopener noreferrer">Theo dõi GitHub Actions ↗</a></p>}
     {error && <div className="automation-error" role="alert">{error}</div>}
     <div className="callback-status"><span>BUILD_STATUS_WEBHOOK_URL</span><span className={callbackUrlConfigured ? "state-ok" : "state-missing"}>{callbackUrlConfigured ? "Đã cấu hình riêng trong Actions Variables" : "URL callback được tạo sau deploy; cấu hình riêng trong Actions Variables"}</span></div>
     <form onSubmit={submit}>
@@ -145,7 +149,8 @@ export function AutomationSecretsForm() {
           })}
         </div>
       </fieldset>)}
-      <div className="automation-actions"><button className="button primary" type="submit" disabled={busy}>{busy ? "Đang đồng bộ…" : "Mã hóa & đồng bộ lên GitHub"}</button><button className="button secondary" type="button" disabled={busy} onClick={() => { setValues({ ...EMPTY_VALUES }); setCertificateResetKey((key) => key + 1); }}>Xóa dữ liệu đang nhập</button><span>{lastSync ? `Lần đồng bộ gần nhất: ${lastSync}` : "Không lưu dữ liệu biểu mẫu vào browser storage."}</span></div>
+      <label className="automation-deploy-option"><input type="checkbox" checked={deployAfterSync} onChange={(event) => setDeployAfterSync(event.target.checked)} disabled={busy} /><span><strong>Triển khai Cloudflare sau khi đồng bộ</strong><small>Gửi workflow deploy-cloudflare.yml qua GitHub Actions. Đây là yêu cầu chạy workflow, không phải xác nhận deploy đã thành công.</small></span></label>
+      <div className="automation-actions"><button className="button primary" type="submit" disabled={busy}>{busy ? "Đang xử lý…" : deployAfterSync ? "Đồng bộ & yêu cầu Deploy" : "Mã hóa & đồng bộ lên GitHub"}</button><button className="button secondary" type="button" disabled={busy} onClick={() => { setValues({ ...EMPTY_VALUES }); setCertificateResetKey((key) => key + 1); }}>Xóa dữ liệu đang nhập</button><span>{lastSync ? `Lần đồng bộ gần nhất: ${lastSync}` : "Không lưu dữ liệu biểu mẫu vào browser storage."}</span></div>
     </form>
     <CertUploadSecure onEncoded={acceptCertificate} onClear={(name) => setField(name, "")} resetKey={certificateResetKey} disabled={busy} />
   </section>;
