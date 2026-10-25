@@ -302,7 +302,7 @@ export function normalizeAutomationValues(values) {
   }
   return normalized;
 }
-async function updateAutomationValues(inputValues, env) {
+async function updateAutomationValues(inputValues, env, { deployAfterSync = false } = {}) {
   const values = normalizeAutomationValues(inputValues);
   const token = String(values.GITHUB_SYNC_TOKEN || env.GITHUB_SYNC_TOKEN || "").trim();
   if (!token) throw new Error("Enter GITHUB_SYNC_TOKEN or configure it as a Worker secret before syncing GitHub Actions values.");
@@ -344,8 +344,28 @@ async function updateAutomationValues(inputValues, env) {
     });
     updated.push(name);
   }
+  let deployment = { requested: false, triggered: false };
+  if (deployAfterSync) {
+    deployment.requested = true;
+    try {
+      await githubActionsRequest(token, env, "workflows/deploy-cloudflare.yml/dispatches", {
+        method: "POST",
+        body: JSON.stringify({ ref: String(env.GITHUB_BRANCH || "main") })
+      });
+      deployment.triggered = true;
+      deployment.actionsUrl = `https://github.com/${String(env.GITHUB_OWNER || "")}/${String(env.GITHUB_REPO || "")}/actions`;
+    } catch {
+      deployment.error = "Settings were synced, but GitHub could not dispatch deploy-cloudflare.yml. Verify Actions: write permission and required Cloudflare credentials.";
+    }
+  }
   const status = await getAutomationStatus(token, env);
-  return { ...status, updated, skipped, note: "GitHub secret values were sealed with the repository public key. Secret values are never returned." };
+  return {
+    ...status,
+    updated,
+    skipped,
+    deployment,
+    note: "GitHub secret values were sealed with the repository public key. Secret values are never returned."
+  };
 }
 
 async function getBuildStatus(env) {
@@ -715,7 +735,7 @@ async function handle(request, env) {
     if (request.method === "POST" && path === "/api/admin/github/automation-secrets") {
       try {
         const body = await readJson(request);
-        return json(await updateAutomationValues(body.values, env), 200);
+        return json(await updateAutomationValues(body.values, env, { deployAfterSync: body.deployAfterSync === true }), 200);
       } catch (error) {
         return json({ success: false, error: String(error?.message || "GitHub automation sync failed.").slice(0, 600) }, 400);
       }
