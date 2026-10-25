@@ -46,6 +46,8 @@ assert.ok(root.includes('run_worker_first = ["/api*", "/admin*", "/web-admin", "
 const productionEdge = readFileSync("workers/edge-router/wrangler.toml", "utf8");
 assert.match(productionEdge, /name = "hendy-app-store-edge"/);
 assert.match(productionEdge, /service = "hendy-app-store-api"/, "Integrated router must bind the API Worker after API deployment.");
+assert.ok(productionEdge.includes('run_worker_first = ["/api*", "/admin*", "/web-admin", "/web-admin/*"]'),
+  "Integrated router must auth-gate both the Admin root path and Admin assets.");
 assert.match(productionEdge, /directory = "\.\.\/\.\.\/apps"/, "Production router must upload the app assets.");
 const deployWorkflow = readFileSync(".github/workflows/deploy-cloudflare.yml", "utf8");
 assert.match(deployWorkflow, /Verify Cloudflare API token/);
