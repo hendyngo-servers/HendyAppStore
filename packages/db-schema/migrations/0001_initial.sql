@@ -1,0 +1,2 @@
+-- Canonical D1 migration for Hendy App Store.
+-- Keep in sync with workers/backend-api/src/db/schema.sql.
