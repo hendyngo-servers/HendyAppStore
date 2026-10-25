@@ -39,7 +39,7 @@ const root = readFileSync("wrangler.toml", "utf8");
 assert.match(root, /STATIC_ASSETS/);
 assert.match(root, /BACKEND_API/);
 assert.match(root, /not_found_handling = "none"/, "Worker assets must leave unmatched route handling to the router.");
-assert.match(root, /run_worker_first = \[\s*"\\/api\\*",\s*"\\/admin\\*",\s*"\\/web-admin\\/\\*"/s,
+assert.ok(root.includes('run_worker_first = ["/api*", "/admin*", "/web-admin/*"]'),
   "Admin/API paths must run through the Worker before matching static files are served.");
 const deployWorkflow = readFileSync(".github/workflows/deploy-cloudflare.yml", "utf8");
 assert.match(deployWorkflow, /Verify Cloudflare API token/);
