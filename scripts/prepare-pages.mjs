@@ -1,0 +1,24 @@
+import { mkdir, copyFile, cp, writeFile, appendFile, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+
+const output = "dist/pages";
+const source = "apps/web-user";
+await mkdir(output, { recursive: true });
+await mkdir(`${output}/web-user`, { recursive: true });
+await copyFile(`${source}/index.html`, `${output}/index.html`);
+await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
+await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
+await copyFile(`${source}/_headers`, `${output}/_headers`);
+await copyFile(`${source}/_redirects`, `${output}/_redirects`);
+const apiOrigin = String(process.env.HENDY_API_BASE_URL || "").replace(/\/$/, "");
+const edgeOrigin = String(process.env.HENDY_EDGE_BASE_URL || "").replace(/\/$/, "");
+const apiBase = apiOrigin ? apiOrigin + "/api" : "/api";
+const adminUrl = edgeOrigin ? edgeOrigin + "/admin" : "/admin";
+await writeFile(`${output}/config.js`, `window.HENDY_CONFIG = Object.freeze({ apiBaseUrl: ${JSON.stringify(apiBase)}, adminUrl: ${JSON.stringify(adminUrl)} });\n`);
+const indexPath = `${output}/index.html`;
+let html = await readFile(indexPath, "utf8");
+if (!html.includes('<script src="/config.js"></script>')) html = html.replace('<script type="module" src="/web-user/src/app.js"></script>', '<script src="/config.js"></script>\n  <script type="module" src="/web-user/src/app.js"></script>');
+await writeFile(indexPath, html);
+if (!existsSync(`${output}/web-user/src/app.js`)) throw new Error("Pages output is missing the public app entry point.");
+if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `api_base=${apiOrigin}\nedge_base=${edgeOrigin}\n`);
+console.log(JSON.stringify({ output, apiConfigured: !!apiOrigin, adminConfigured: !!edgeOrigin }, null, 2));

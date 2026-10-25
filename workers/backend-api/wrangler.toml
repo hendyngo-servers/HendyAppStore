@@ -1,0 +1,15 @@
+name = "hendy-app-store-api"
+main = "./src/index.js"
+compatibility_date = "2026-10-25"
+workers_dev = true
+
+[vars]
+GITHUB_OWNER = "hendyngo-servers"
+GITHUB_REPO = "HendyAppStore"
+GITHUB_BRANCH = "main"
+ALLOWED_ORIGINS = "https://hendy-app-store.pages.dev"
+PUBLIC_API_BASE_URL = ""
+
+[[r2_buckets]]
+binding = "RELEASES_BUCKET"
+bucket_name = "hendy-app-store-releases"

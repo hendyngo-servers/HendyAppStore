@@ -1,23 +1,18 @@
-# Canonical production Worker configuration for the GitHub Actions workflow and direct Workers Builds.
-# Secrets are provisioned separately; Worker authorization fails closed until Access secrets exist.
-# Keep the Worker name exactly "hendy-tool-releas" to retain its workers.dev URL.
-name = "hendy-tool-releas"
-main = "./src/worker.ts"
-compatibility_date = "2026-10-23"
+# Canonical edge router config; no secrets are stored in this file.
+name = "hendy-app-store-edge"
+main = "workers/edge-router/src/index.js"
+compatibility_date = "2026-10-25"
 workers_dev = true
 
 [assets]
-directory = "./.worker-dist"
-binding = "ASSETS"
-not_found_handling = "single-page-application"
-run_worker_first = ["/", "/api/*", "/health", "/healthz", "/admin*", "/studio*"]
+directory = "./apps"
+binding = "STATIC_ASSETS"
+not_found_handling = "404"
 
 [vars]
-ENVIRONMENT = "production"
-APP_NAME = "Hendy Store — App Store & Software Releases"
-PUBLIC_BASE_URL = "https://hendy-tool-releas.ngogiaidy56.workers.dev"
+APP_NAME = "Hendy App Store"
+ADMIN_HOSTNAMES = ""
 
-[[r2_buckets]]
-binding = "RELEASES_BUCKET"
-bucket_name = "hendy-tool-releases"
-
+[[services]]
+binding = "BACKEND_API"
+service = "hendy-app-store-api"

@@ -1,0 +1,3 @@
+export function fullDevStudioLayout(content) {
+  return `<div class="studio-frame"><aside class="studio-rail"><div class="rail-logo">H</div><span>STUDIO</span><a href="#source" title="Source">⌘</a><a href="#tree" title="File tree">⑂</a><a href="#release" title="Build">⇧</a><div class="rail-bottom">CF</div></aside><div class="studio-main"><header class="studio-top"><div><span class="eyebrow">DEVELOPER CONTROL CENTER</span><h1>Hendy <span>Source Studio</span></h1></div><div class="top-actions"><span class="secure-pill"><i></i> ACCESS GATED</span><a href="/" class="exit-link">Store ↗</a></div></header>${content}</div></div>`;
+}

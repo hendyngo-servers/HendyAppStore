@@ -1,0 +1,41 @@
+name: Hendy App Store CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hendy-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate structure, tests and Pages output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate new architecture and absence of legacy source
+        run: npm run validate
+      - name: Unit and security-guard tests
+        run: npm test
+      - name: Build public Pages bundle
+        run: npm run build
+      - name: Verify output tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/pages/index.html
+          test -s dist/pages/config.js
+          test -s dist/pages/web-user/src/app.js
+          test ! -e dist/pages/web-admin/index.html

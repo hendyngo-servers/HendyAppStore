@@ -1,0 +1,295 @@
+name: Hendy App Store — Multi-OS Build Matrix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "workers/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "wrangler.toml"
+      - ".github/workflows/matrix-build.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish_signed:
+        description: "After build, run the signing-and-R2 publishing matrix (requires release-signing environment secrets)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: hendy-matrix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build source / ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: android
+            runner: ubuntu-latest
+          - target: windows
+            runner: windows-latest
+          - target: ios
+            runner: macos-latest
+    steps:
+      - name: Checkout without persisted Git credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate source and build public storefront
+        run: |
+          npm run validate
+          npm test
+          npm run build
+      - name: Prepare artifact directories
+        shell: bash
+        run: mkdir -p matrix-output/unsigned
+      - name: Setup Java for Android
+        if: matrix.target == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build Android project (unsigned; no signing keys available to build scripts)
+        if: matrix.target == 'android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f android/gradlew ]; then
+            chmod +x android/gradlew
+            (cd android && ./gradlew assembleRelease)
+            APK="$(find android -type f -path '*/outputs/apk/*/*.apk' | head -n 1 || true)"
+            if [ -n "$APK" ]; then cp "$APK" matrix-output/unsigned/android.apk
+            else echo "Gradle completed but no APK was emitted." > matrix-output/android-build.txt; fi
+          else
+            echo "No Android Gradle project/gradlew found. Build source not supplied; no APK fabricated." > matrix-output/no-native-project.txt
+          fi
+      - name: Build Windows project (unsigned; no signing keys available to build scripts)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force matrix-output/unsigned | Out-Null
+          $project = Get-ChildItem -Path @("windows","platforms/windows","apps/native-windows") -Filter "*.csproj" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $project) {
+            "No Windows .NET project was found. Add a real Windows project before generating an executable." | Set-Content matrix-output/no-native-project.txt
+          } else {
+            dotnet publish $project.FullName -c Release -o matrix-output/windows-publish
+            $exe = Get-ChildItem -Path matrix-output/windows-publish -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($null -ne $exe) { Copy-Item $exe.FullName matrix-output/unsigned/windows.exe }
+            else { "Windows project built but did not produce an .exe." | Set-Content matrix-output/windows-build.txt }
+          }
+      - name: Build iOS project (unsigned .app; signing is isolated into the protected signing job)
+        if: matrix.target == 'ios'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$(find ios platforms/ios apps/native-ios -maxdepth 4 -type d -name '*.xcodeproj' -print -quit 2>/dev/null || true)"
+          if [ -z "$PROJECT" ]; then
+            echo "No Xcode project found. Add a real iOS project before generating an IPA." > matrix-output/no-native-project.txt
+          else
+            SCHEME="$(basename "$PROJECT" .xcodeproj)"
+            xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release -sdk iphoneos -derivedDataPath matrix-output/ios-derived CODE_SIGNING_ALLOWED=NO build
+            APP="$(find matrix-output/ios-derived/Build/Products -type d -name '*.app' -path '*Release-iphoneos*' -print -quit 2>/dev/null || true)"
+            if [ -n "$APP" ]; then mkdir -p matrix-output/unsigned/ios-app; ditto "$APP" "matrix-output/unsigned/ios-app/$(basename "$APP")"
+            else echo "Xcode build completed but no .app bundle was found." > matrix-output/ios-build.txt; fi
+          fi
+      - name: Upload unsigned build products / diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: matrix-output/
+          if-no-files-found: error
+          retention-days: 10
+
+  sign:
+    name: Sign verified artifact / ${{ matrix.target }}
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_signed == true }}
+    runs-on: ${{ matrix.runner }}
+    environment: release-signing
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: android
+            runner: ubuntu-latest
+          - target: windows
+            runner: windows-latest
+          - target: ios
+            runner: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: release-input
+      - name: Prepare output directory
+        shell: bash
+        run: mkdir -p matrix-output/signed
+      - name: Sign Windows executable with SignTool
+        if: matrix.target == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $exe = "release-input/unsigned/windows.exe"
+          if (!(Test-Path $exe)) { Write-Host "No Windows executable was produced; nothing to sign."; exit 0 }
+          if (!$env:WINDOWS_CERT_PFX_BASE64 -or !$env:WINDOWS_CERT_PASSWORD) { Write-Warning "Windows signing secrets are not configured; executable will not be published as signed."; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "hendy-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $signTool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$signTool) { throw "SignTool.exe not found on runner." }
+          & $signTool.FullName sign /fd SHA256 /f $pfx /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $exe
+          if ($LASTEXITCODE -ne 0) { throw "SignTool signing failed." }
+          & $signTool.FullName verify /pa /v $exe
+          if ($LASTEXITCODE -ne 0) { throw "SignTool signature verification failed." }
+          Copy-Item $exe matrix-output/signed/windows.exe
+      - name: Sign and verify Android APK
+        if: matrix.target == 'android'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APK="release-input/unsigned/android.apk"
+          if [ ! -f "$APK" ]; then echo "No Android APK was produced; nothing to sign."; exit 0; fi
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] || [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] || [ -z "${ANDROID_KEY_ALIAS:-}" ] || [ -z "${ANDROID_KEY_PASSWORD:-}" ]; then
+            echo "Android signing secrets are not configured; APK will not be published as signed."; exit 0
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hendy-release.keystore"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1)"
+          test -n "$APKSIGNER" || { echo "apksigner not found in Android SDK"; exit 1; }
+          "$APKSIGNER" sign --ks "$RUNNER_TEMP/hendy-release.keystore" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" --key-pass "pass:$ANDROID_KEY_PASSWORD" --out "$RUNNER_TEMP/hendy-signed.apk" "$APK"
+          "$APKSIGNER" verify --verbose "$RUNNER_TEMP/hendy-signed.apk"
+          cp "$RUNNER_TEMP/hendy-signed.apk" matrix-output/signed/android.apk
+      - name: Sign iOS .app and package an IPA
+        if: matrix.target == 'ios'
+        shell: bash
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_SIGNING_IDENTITY: ${{ secrets.IOS_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          APP="$(find release-input/unsigned/ios-app -type d -name '*.app' -print -quit 2>/dev/null || true)"
+          if [ -z "$APP" ]; then echo "No iOS .app bundle was produced; nothing to sign."; exit 0; fi
+          if [ -z "${IOS_CERTIFICATE_P12_BASE64:-}" ] || [ -z "${IOS_CERTIFICATE_PASSWORD:-}" ] || [ -z "${IOS_PROVISION_PROFILE_BASE64:-}" ]; then
+            echo "iOS signing secrets are not configured; no IPA will be published."; exit 0
+          fi
+          CERT="$RUNNER_TEMP/hendy-ios-signing.p12"
+          PROFILE="$RUNNER_TEMP/hendy-profile.mobileprovision"
+          KEYCHAIN="$RUNNER_TEMP/hendy-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          printf '%s' "$IOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT"
+          printf '%s' "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode > "$PROFILE"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT" -k "$KEYCHAIN" -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          IDENTITY="${IOS_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F '\"' '/Apple Distribution|iPhone Distribution/{print $2; exit}')}"
+          test -n "$IDENTITY" || { echo "No iOS signing identity found in the supplied certificate."; exit 1; }
+          security cms -D -i "$PROFILE" > "$RUNNER_TEMP/profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          cp "$PROFILE" "$APP/embedded.mobileprovision"
+          codesign --force --deep --sign "$IDENTITY" --keychain "$KEYCHAIN" "$APP"
+          codesign --verify --deep --strict "$APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          ditto "$APP" "$RUNNER_TEMP/Payload/$(basename "$APP")"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/Payload" "$RUNNER_TEMP/hendy.ipa"
+          mkdir -p matrix-output/signed
+          cp "$RUNNER_TEMP/hendy.ipa" matrix-output/signed/ios.ipa
+      - name: Upload only signature-verified artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-build-${{ matrix.target }}
+          path: matrix-output/signed/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  publish-r2:
+    name: Publish verified signed artifacts to Cloudflare R2
+    needs: sign
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_signed == true && success() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: signed-build-*
+          path: release-artifacts
+          merge-multiple: false
+          if-no-artifact-found: ignore
+      - name: Publish signed artifacts and catalog manifests to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning::Cloudflare API credentials are missing; verified artifacts remain available as GitHub Actions artifacts only."
+            exit 0
+          fi
+          shopt -s nullglob
+          count=0
+          publish_one() {
+            local platform="$1" file="$2" filename="$3" mime="$4"
+            [ -f "$file" ] || return 0
+            local version="${GITHUB_SHA:0:12}"
+            local key="artifacts/$platform/$version/$filename"
+            local catalog_id="$version-$platform"
+            npx --yes wrangler@4 r2 object put "hendy-app-store-releases/$key" --file "$file" --content-type "$mime" --remote
+            export PLATFORM="$platform" FILE="$file" OBJECT_KEY="$key" RELEASE_VERSION="$version" CATALOG_ID="$catalog_id"
+            node --input-type=module <<'NODE'
+            import { readFileSync, writeFileSync, statSync } from "node:fs";
+            import { createHash } from "node:crypto";
+            const bytes = readFileSync(process.env.FILE);
+            const sha256 = createHash("sha256").update(bytes).digest("hex");
+            const manifest = {
+              id: process.env.CATALOG_ID,
+              appName: "Hendy App Store",
+              description: "Signature-verified matrix build.",
+              filename: process.env.FILE.split(/[\\/]/).pop(),
+              version: process.env.RELEASE_VERSION,
+              platform: process.env.PLATFORM,
+              objectKey: process.env.OBJECT_KEY,
+              sha256,
+              size: statSync(process.env.FILE).size,
+              publishedAt: new Date().toISOString(),
+              public: true,
+              signatureStatus: "verified-by-platform-signing-tool"
+            };
+            writeFileSync("/tmp/hendy-release-catalog.json", JSON.stringify(manifest, null, 2) + "\n");
+            NODE
+            npx --yes wrangler@4 r2 object put "hendy-app-store-releases/catalog/$catalog_id.json" --file /tmp/hendy-release-catalog.json --content-type application/json --remote
+            count=$((count + 1))
+            echo "Published signature-verified $platform artifact to R2."
+          }
+          publish_one android release-artifacts/signed-build-android/android.apk android.apk application/vnd.android.package-archive
+          publish_one windows release-artifacts/signed-build-windows/windows.exe windows.exe application/vnd.microsoft.portable-executable
+          publish_one ios release-artifacts/signed-build-ios/ios.ipa ios.ipa application/octet-stream
+          echo "Uploaded $count signed artifact(s). No unsigned artifact is published."
