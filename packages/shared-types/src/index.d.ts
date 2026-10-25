@@ -1,6 +1,6 @@
 export type Platform = "android" | "ios" | "windows" | "macos" | "web";
 export type BuildStatus = "queued" | "running" | "success" | "failed" | "cancelled";
-export interface AppData {
+export interface AppScreenshot {\n  url: string;\n  caption?: string;\n  position?: number;\n}\nexport interface AppData {
   id: string;
   slug: string;
   name: string;
