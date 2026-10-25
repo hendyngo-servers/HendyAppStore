@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AUTOMATION_FIELDS } from "../workers/backend-api/src/index.js";
+import { AUTOMATION_FIELDS, normalizeAutomationValues } from "../workers/backend-api/src/index.js";
 
 test("automation form schema tracks exactly 26 unique GitHub Secrets and Variables", () => {
   assert.equal(AUTOMATION_FIELDS.length, 26);
@@ -29,4 +29,16 @@ test("certificate/private-key material is classified as GitHub Secret, not Varia
 
 test("build callback URL is derived separately and not counted as a user-entered credential", () => {
   assert.equal(AUTOMATION_FIELDS.some((field) => field.name === "BUILD_STATUS_WEBHOOK_URL"), false);
+});
+
+test("certificate Base64 normalization removes whitespace and rejects malformed input", () => {
+  const normalized = normalizeAutomationValues({ ANDROID_KEYSTORE_BASE64: " Zm9v\\n", AUTO_HEAL_ENABLED: "false" });
+  assert.equal(normalized.ANDROID_KEYSTORE_BASE64, "Zm9v");
+  assert.equal(normalized.AUTO_HEAL_ENABLED, "false");
+  assert.throws(() => normalizeAutomationValues({ ANDROID_KEYSTORE_BASE64: "not base64!" }), /valid Base64/);
+  assert.throws(() => normalizeAutomationValues({ AUTO_HEAL_ENABLED: "maybe" }), /must be true or false/);
+});
+test("empty automation fields are skipped so existing GitHub values are not erased", () => {
+  assert.deepEqual(normalizeAutomationValues({ GITHUB_SYNC_TOKEN: "", DISCORD_WEBHOOK_URL: "   " }), {});
+  assert.throws(() => normalizeAutomationValues({ LLM_API_KEY: "bad\\u0000value" }), /NUL/);
 });
