@@ -33,5 +33,17 @@ export async function onRequest(context) {
       }
     });
   }
+  if (url.pathname === "/admin" || url.pathname === "/admin/") {
+    const rewritten = new URL("/web-admin/index.html", request.url);
+    return context.next(new Request(rewritten, request));
+  }
+  if (url.pathname.startsWith("/admin/")) {
+    const rewritten = new URL("/web-admin/" + url.pathname.slice("/admin/".length) + url.search, request.url);
+    return context.next(new Request(rewritten, request));
+  }
+  if (url.pathname === "/web-admin" || url.pathname === "/web-admin/") {
+    const rewritten = new URL("/web-admin/index.html", request.url);
+    return context.next(new Request(rewritten, request));
+  }
   return context.next();
 }
