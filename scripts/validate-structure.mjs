@@ -15,7 +15,7 @@ const required = [
   "apps/web-admin/src/components/FileTreeVisualizer.js", "apps/web-admin/src/components/BuildStatusMonitor.js",
   "apps/web-admin/src/components/StoreMetadataForm.js", "apps/web-admin/src/components/ArtifactDraftForm.js",
   "apps/web-admin/src/components/AutomationSecretsForm.tsx", "apps/web-admin/src/components/CertUploadSecure.tsx",
-  "apps/web-admin/src/automation-entry.tsx", "scripts/build-admin-react.mjs", "tests/automation-secrets.test.mjs",
+  "apps/web-admin/src/automation-entry.tsx", "scripts/build-admin-react.mjs", "scripts/sync-github-variable.mjs", "tests/automation-secrets.test.mjs",
   "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
   "apps/web-admin/src/layouts/FullDevStudioLayout.js",
   "packages/shared-types/src/index.js", "packages/shared-types/src/index.d.ts", "packages/ui-components/src/index.js",
