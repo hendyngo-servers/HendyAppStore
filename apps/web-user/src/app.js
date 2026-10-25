@@ -7,6 +7,11 @@ const API_BASE = (globalThis.HENDY_CONFIG?.apiBaseUrl || "/api").replace(/\/$/, 
 const $ = (selector) => document.querySelector(selector);
 let releases = [];
 $("#year").textContent = String(new Date().getFullYear());
+const initialDevice = detectDevice();
+const osLabels = { ios: "iPhone/iPad", android: "Android", windows: "Windows PC", macos: "macOS", chromeos: "ChromeOS", linux: "Linux", unknown: "thiết bị của bạn", web: "trình duyệt" };
+const recommendation = $("#device-recommendation");
+if (recommendation) recommendation.textContent = `Đã nhận diện: ${osLabels[initialDevice.os] || osLabels.web} · ${initialDevice.isMobile ? "giao diện di động" : initialDevice.isTablet ? "giao diện máy tính bảng" : "giao diện máy tính"}.`;
+
 const adminLink = $(".admin-link");
 if (adminLink && globalThis.HENDY_CONFIG?.adminUrl) adminLink.href = globalThis.HENDY_CONFIG.adminUrl;
 
