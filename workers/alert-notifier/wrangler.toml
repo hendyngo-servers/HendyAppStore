@@ -9,8 +9,6 @@ database_name = "hendy-app-store-db"
 database_id = "__D1_DATABASE_ID__"
 
 [vars]
-DISCORD_WEBHOOK_URL = ""
-AUTO_HEAL_ENABLED = "false"
 
 [[services]]
 binding = "BACKEND_API"
