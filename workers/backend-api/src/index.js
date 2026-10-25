@@ -197,6 +197,7 @@ async function githubApi(path, env, init = {}) {
   return data;
 }
 export const AUTOMATION_FIELDS = Object.freeze([
+  { name: "CF_ACCESS_TEAM_DOMAIN", kind: "variable" },
   { name: "CF_ACCESS_AUD", kind: "variable" },
   { name: "CF_ACCESS_ADMIN_EMAILS", kind: "variable" },
   { name: "ALLOWED_ORIGINS", kind: "variable" },
@@ -220,7 +221,6 @@ export const AUTOMATION_FIELDS = Object.freeze([
   { name: "MACOS_SIGNING_IDENTITY", kind: "variable" },
   { name: "APPLE_ID", kind: "variable" },
   { name: "APPLE_TEAM_ID", kind: "variable" },
-  { name: "APPLE_APP_SPECIFIC_PASSWORD", kind: "secret" },
   { name: "WINDOWS_CERT_PFX_BASE64", kind: "secret" },
   { name: "WINDOWS_CERT_PASSWORD", kind: "secret" }
 ]);
