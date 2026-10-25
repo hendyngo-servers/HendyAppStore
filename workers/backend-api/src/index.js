@@ -85,8 +85,9 @@ async function uploadRelease(body, env) {
   const metadata = {
     id, appName: String(body.appName || "Hendy App").slice(0, 120), description: String(body.description || "").slice(0, 500),
     filename, version: String(body.version || "0.0.0").slice(0, 64), platform, objectKey, sha256,
-    size: bytes.byteLength, publishedAt: new Date().toISOString(), public: body.publish === true,
-    signatureStatus: "not-verified-by-api"
+    size: bytes.byteLength, uploadedAt: new Date().toISOString(), public: false,
+    signatureStatus: "not-verified-by-api",
+    publicationNote: "Draft only. Public catalog entries must be written by the protected signing-verification workflow."
   };
   await env.RELEASES_BUCKET.put(`catalog/${id}.json`, JSON.stringify(metadata), { httpMetadata: { contentType: "application/json" } });
   return json({ success: true, release: metadata, note: "SHA-256 calculated. This API does not claim to verify platform signatures." }, 201);
@@ -106,7 +107,8 @@ async function handle(request, env) {
     if (request.method === "POST" && path === "/api/analyze") {
       const body = await readJson(request);
       const result = analyzeProjectFiles(body.files || [], { repair: body.repair === true });
-      return json(result, result.success ? 200 : 422);
+      // Always return diagnostics as JSON so the Admin UI can display invalid-source reports.
+      return json(result, 200);
     }
     if (request.method === "POST" && path === "/api/github/sync") {
       const body = await readJson(request);
