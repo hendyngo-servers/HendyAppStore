@@ -117,9 +117,7 @@ jobs:
           const selected = targets.filter((target) => Object.hasOwn(runners, target));
           if (!selected.length) throw new Error("No supported build target was selected.");
           const matrix = { include: selected.map((target) => ({ target, runner: runners[target] })) };
-          appendFileSync(process.env.GITHUB_OUTPUT, "targets=" + selected.join(",") + "
-matrix=" + JSON.stringify(matrix) + "
-");
+          appendFileSync(process.env.GITHUB_OUTPUT, "targets=" + selected.join(",") + "\nmatrix=" + JSON.stringify(matrix) + "\n");
           NODE
 
   build:
