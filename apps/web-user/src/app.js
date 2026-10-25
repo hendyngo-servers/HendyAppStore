@@ -1,6 +1,7 @@
 import { detectDevice } from "./hooks/useDeviceDetect.js";
 import { renderMobileLayout } from "./layouts/MobileAppStoreLayout.js";
 import { renderDesktopLayout } from "./layouts/DesktopPortalLayout.js";
+import { renderPlatformDownloadActions } from "./components/PlatformDownloadActions.js";
 
 const API_BASE = (globalThis.HENDY_CONFIG?.apiBaseUrl || "/api").replace(/\/$/, "");
 const $ = (selector) => document.querySelector(selector);
@@ -13,7 +14,7 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function normalizeRelease(r) {
-  return { id: String(r.id || r.key || ""), name: String(r.appName || r.name || r.product || "Hendy App"), description: String(r.description || r.notes || "Bản phát hành được quản lý"), version: String(r.version || "—"), platform: String(r.platform || "Multi-platform"), updatedAt: r.publishedAt || r.createdAt || r.updatedAt || "", downloadUrl: r.downloadUrl || r.url || "", sha256: r.sha256 || r.checksum || "" };
+  return { id: String(r.id || r.key || ""), name: String(r.appName || r.name || r.product || "Hendy App"), description: String(r.description || r.notes || "Bản phát hành được quản lý"), version: String(r.version || "—"), platform: String(r.platform || "Multi-platform"), updatedAt: r.publishedAt || r.createdAt || r.updatedAt || "", downloadUrl: r.downloadUrl || r.url || "", filename: String(r.filename || ""), manifestUrl: r.manifestUrl || "", sha256: r.sha256 || r.checksum || "" };
 }
 function showStatus(text, ok = true) {
   const el = $("#api-status"); el.textContent = text; el.classList.toggle("error", !ok);
@@ -29,12 +30,12 @@ function renderCatalog(list = releases) {
   }));
 }
 function showRelease(item) {
-  $("#release-list").innerHTML = `<article class="release-card"><div><span class="release-platform">${escapeHtml(item.platform)}</span><h3>${escapeHtml(item.name)} <small>${escapeHtml(item.version)}</small></h3><p>${escapeHtml(item.description)}</p><small>${item.sha256 ? "SHA-256: " + escapeHtml(item.sha256) : "Checksum chưa được công bố"}</small></div><div class="release-actions">${item.downloadUrl ? `<a class="button primary" href="${escapeHtml(item.downloadUrl)}" rel="noopener noreferrer">Tải bản phát hành</a>` : '<span class="disabled-note">Chưa có tệp tải xuống</span>'}</div></article>`;
+  $("#release-list").innerHTML = `<article class="release-card"><div><span class="release-platform">${escapeHtml(item.platform)}</span><h3>${escapeHtml(item.name)} <small>${escapeHtml(item.version)}</small></h3><p>${escapeHtml(item.description)}</p><small>${item.sha256 ? "SHA-256: " + escapeHtml(item.sha256) : "Checksum chưa được công bố"}</small></div><div class="release-actions">${renderPlatformDownloadActions(item, API_BASE)}</div></article>`;
   $("#releases").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function renderReleases() {
   const root = $("#release-list");
-  root.innerHTML = releases.length ? releases.slice(0, 8).map((r) => `<article class="release-row"><div class="release-badge">${escapeHtml(r.platform.slice(0,3).toUpperCase())}</div><div class="release-summary"><strong>${escapeHtml(r.name)}</strong><span>${escapeHtml(r.version)} · ${escapeHtml(r.platform)}</span></div><div class="release-end"><span>${escapeHtml(r.updatedAt || "Ngày phát hành chưa có")}</span>${r.downloadUrl ? `<a href="${escapeHtml(r.downloadUrl)}" rel="noopener noreferrer">Tải xuống ↗</a>` : '<span class="disabled-note">Đang chuẩn bị</span>'}</div></article>`).join("") : '<article class="empty-state">Chưa có bản phát hành công khai.</article>';
+  root.innerHTML = releases.length ? releases.slice(0, 8).map((r) => `<article class="release-row"><div class="release-badge">${escapeHtml(r.platform.slice(0,3).toUpperCase())}</div><div class="release-summary"><strong>${escapeHtml(r.name)}</strong><span>${escapeHtml(r.version)} · ${escapeHtml(r.platform)}</span></div><div class="release-end"><span>${escapeHtml(r.updatedAt || "Ngày phát hành chưa có")}</span>${r.downloadUrl ? renderPlatformDownloadActions(r, API_BASE) : '<span class="disabled-note">Đang chuẩn bị</span>'}</div></article>`).join("") : '<article class="empty-state">Chưa có bản phát hành công khai.</article>';
 }
 async function loadReleases() {
   try {
