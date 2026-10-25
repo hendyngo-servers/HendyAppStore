@@ -44,7 +44,7 @@ export function useAuth(): UseAuthReturn {
     setLoading(true);
     setError(null);
     try {
-      const res = await googleSignIn(false);
+      const res = await googleSignIn();
       if (res?.user) {
         setUser(res.user);
         return res.user;
