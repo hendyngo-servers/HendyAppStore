@@ -273,6 +273,58 @@ function redactBuildLogs(value) {
     .replace(/\\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16})\\b/g, "[REDACTED]")
     .replace(/((?:TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)\\s*[:=]\\s*)[^\\r\\n]+/gi, "$1[REDACTED]");
 }
+async function extractGithubZipLogs(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+  const readU16 = (offset) => view.getUint16(offset, true);
+  const readU32 = (offset) => view.getUint32(offset, true);
+  if (bytes.length < 22) throw new Error("GitHub job log body is too small to be a ZIP archive.");
+  let eocd = -1;
+  const min = Math.max(0, bytes.length - 22 - 65535);
+  for (let i = bytes.length - 22; i >= min; i--) {
+    if (readU32(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("GitHub job log body is not a ZIP archive.");
+  const entryCount = readU16(eocd + 10);
+  let central = readU32(eocd + 16);
+  const chunks = [];
+  let total = 0;
+  for (let n = 0; n < entryCount && n < 200; n++) {
+    if (central + 46 > bytes.length || readU32(central) !== 0x02014b50) break;
+    const method = readU16(central + 10);
+    const compressedSize = readU32(central + 20);
+    const uncompressedSize = readU32(central + 24);
+    const nameLength = readU16(central + 28);
+    const extraLength = readU16(central + 30);
+    const commentLength = readU16(central + 32);
+    const localOffset = readU32(central + 42);
+    const name = new TextDecoder().decode(bytes.slice(central + 46, central + 46 + nameLength));
+    central += 46 + nameLength + extraLength + commentLength;
+    if (name.endsWith("/") || compressedSize > 2 * 1024 * 1024 || uncompressedSize > 4 * 1024 * 1024) continue;
+    if (localOffset + 30 > bytes.length || readU32(localOffset) !== 0x04034b50) continue;
+    const localNameLength = readU16(localOffset + 26);
+    const localExtraLength = readU16(localOffset + 28);
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+    if (dataOffset + compressedSize > bytes.length) continue;
+    const payload = bytes.slice(dataOffset, dataOffset + compressedSize);
+    let decoded;
+    if (method === 0) decoded = payload;
+    else if (method === 8) {
+      try {
+        const stream = new Blob([payload]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+        decoded = new Uint8Array(await new Response(stream).arrayBuffer());
+      } catch { continue; }
+    } else continue;
+    if (decoded.length > 0) {
+      const text = new TextDecoder().decode(decoded);
+      chunks.push("FILE " + name + "\\n" + redactBuildLogs(text));
+      total += text.length;
+      if (total >= 24000) break;
+    }
+  }
+  if (!chunks.length) throw new Error("ZIP archive had no readable log entries.");
+  return chunks.join("\\n\\n").slice(-24000);
+}
 async function fetchGithubBuildLogs(runId, env) {
   const data = await githubApi("/actions/runs/" + encodeURIComponent(String(runId)) + "/jobs?per_page=100", env);
   const jobs = Array.isArray(data.jobs) ? data.jobs : [];
@@ -292,10 +344,12 @@ async function fetchGithubBuildLogs(runId, env) {
         chunks.push("JOB " + String(job.name || job.id) + ": GitHub log request returned HTTP " + response.status + ".");
         continue;
       }
-      let text = await response.text();
-      if (text.startsWith("PK\\u0003\\u0004")) {
-        chunks.push("JOB " + String(job.name || job.id) + ": log archive was returned as ZIP; raw text logs were not available.");
-        continue;
+      const body = await response.arrayBuffer();
+      let text;
+      try {
+        text = await extractGithubZipLogs(body);
+      } catch {
+        text = new TextDecoder().decode(body).slice(-9000);
       }
       text = redactBuildLogs(text);
       chunks.push("JOB " + String(job.name || job.id) + " (" + String(job.conclusion || job.status || "unknown") + ")\\n" + text.slice(-9000));
