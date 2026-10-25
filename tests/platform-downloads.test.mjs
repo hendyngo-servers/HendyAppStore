@@ -17,7 +17,7 @@ test("rejects an unsupported Windows download extension", () => {
   assert.match(renderWindowsSafeInstaller({ filename: "setup.sh", downloadUrl: "https://example.test/setup.sh" }), /không hợp lệ/);
 });
 test("iOS OTA action points to the generated manifest endpoint", () => {
-  const html = renderIOSOtaDownloader({ id: "release-42", platform: "ios", downloadUrl: "https://example.test/app.ipa" }, "https://api.example.test/api");
+  const html = renderIOSOtaDownloader({ id: "release-42", platform: "ios", filename: "app.ipa", downloadUrl: "https://example.test/app.ipa" }, "https://api.example.test/api");
   assert.ok(html.includes("itms-services://?action=download-manifest"), "iOS OTA URL should use the install manifest scheme");
   assert.match(html, /ios-manifest/);
 });
