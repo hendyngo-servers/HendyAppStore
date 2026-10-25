@@ -35,6 +35,8 @@ Local preview on `http://127.0.0.1:4173` serves the frontends only; it does not 
 
 Set these under **Settings → Secrets and variables → Actions**:
 
+The Admin form contains exactly **26 core fields**. `BUILD_STATUS_WEBHOOK_URL` is derived from the deployed Alert Worker and synced as an Actions Variable. `APPLE_APP_SPECIFIC_PASSWORD` is an optional advanced notarization credential and is not part of the 26-field form; configure it manually in a protected `release-signing` environment if you use Apple notarization.
+
 | Name | Type | Purpose |
 |---|---|---|
 | `CLOUDFLARE_API_TOKEN` | Secret | Workers, Pages, R2, D1, KV and Queues permissions |
