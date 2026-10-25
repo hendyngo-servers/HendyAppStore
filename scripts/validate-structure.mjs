@@ -13,7 +13,10 @@ const required = [
   "apps/web-admin/src/providers/AuthProvider.js", "apps/web-admin/src/hooks/useVirtualFileTree.js",
   "apps/web-admin/src/components/CodePasteZone.js", "apps/web-admin/src/components/FileUploadZone.js",
   "apps/web-admin/src/components/FileTreeVisualizer.js", "apps/web-admin/src/components/BuildStatusMonitor.js",
-  "apps/web-admin/src/components/StoreMetadataForm.js", "apps/web-admin/src/components/ArtifactDraftForm.js", "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
+  "apps/web-admin/src/components/StoreMetadataForm.js", "apps/web-admin/src/components/ArtifactDraftForm.js",
+  "apps/web-admin/src/components/AutomationSecretsForm.tsx", "apps/web-admin/src/components/CertUploadSecure.tsx",
+  "apps/web-admin/src/automation-entry.tsx", "scripts/build-admin-react.mjs", "tests/automation-secrets.test.mjs",
+  "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
   "apps/web-admin/src/layouts/FullDevStudioLayout.js",
   "packages/shared-types/src/index.js", "packages/shared-types/src/index.d.ts", "packages/ui-components/src/index.js",
   "workers/edge-router/src/index.js", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
@@ -39,6 +42,11 @@ const apiConfig = readFileSync("workers/backend-api/wrangler.toml", "utf8");
 for (const binding of ["RELEASES_BUCKET", "DB", "CONFIG_CACHE", "BUILD_QUEUE"]) assert.ok(apiConfig.includes(binding), "Backend binding missing: " + binding);
 const matrix = readFileSync(".github/workflows/matrix-build.yml", "utf8");
 for (const runner of ["ubuntu-latest", "windows-2025", "macos-latest"]) assert.ok(matrix.includes(runner), "Matrix runner missing: " + runner);
+assert.ok(matrix.includes("detect-targets") && matrix.includes("fromJson(needs.detect-targets.outputs.matrix)"), "Dynamic target matrix is missing.");
+assert.equal(/render\\.com/i.test(matrix), false, "Render deployment must remain removed.");
+const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+for (const dependency of ["libsodium-wrappers-sumo", "react", "react-dom"]) assert.ok(manifest.dependencies?.[dependency], "Root dependency missing: " + dependency);
+assert.ok(manifest.devDependencies?.esbuild, "esbuild is required to bundle the React Admin panels.");
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
