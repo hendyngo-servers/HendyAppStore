@@ -32,7 +32,7 @@ test("build callback URL is derived separately and not counted as a user-entered
 });
 
 test("certificate Base64 normalization removes whitespace and rejects malformed input", () => {
-  const normalized = normalizeAutomationValues({ ANDROID_KEYSTORE_BASE64: " Zm9v\\n", AUTO_HEAL_ENABLED: "false" });
+  const normalized = normalizeAutomationValues({ ANDROID_KEYSTORE_BASE64: " Zm9v\n", AUTO_HEAL_ENABLED: "false" });
   assert.equal(normalized.ANDROID_KEYSTORE_BASE64, "Zm9v");
   assert.equal(normalized.AUTO_HEAL_ENABLED, "false");
   assert.throws(() => normalizeAutomationValues({ ANDROID_KEYSTORE_BASE64: "not base64!" }), /valid Base64/);
@@ -40,5 +40,5 @@ test("certificate Base64 normalization removes whitespace and rejects malformed 
 });
 test("empty automation fields are skipped so existing GitHub values are not erased", () => {
   assert.deepEqual(normalizeAutomationValues({ GITHUB_SYNC_TOKEN: "", DISCORD_WEBHOOK_URL: "   " }), {});
-  assert.throws(() => normalizeAutomationValues({ LLM_API_KEY: "bad\\u0000value" }), /NUL/);
+  assert.throws(() => normalizeAutomationValues({ LLM_API_KEY: "bad\u0000value" }), /NUL/);
 });
