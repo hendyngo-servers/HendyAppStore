@@ -254,6 +254,155 @@ async function dispatchBuildToGitHub(message, env) {
   }
   return result;
 }
+function isAutoHealSourcePath(path) {
+  const value = String(path || "").replace(/\\\\/g, "/");
+  return /^(apps|workers|packages|scripts)\\//.test(value)
+    && /\\.(?:js|mjs|cjs|ts|tsx|jsx|css|html|sql)$/i.test(value)
+    && !/(^|\\/)\\.github(\\/|$)/i.test(value)
+    && !/(^|\\/)(node_modules|dist|coverage)(\\/|$)/i.test(value);
+}
+function decodeGithubBase64(value) {
+  const encoded = String(value || "").replace(/\\s+/g, "");
+  const raw = atob(encoded);
+  const bytes = Uint8Array.from(raw, (ch) => ch.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+function redactBuildLogs(value) {
+  return String(value || "")
+    .replace(/(authorization\\s*:\\s*bearer\\s+)[^\\s]+/gi, "$1[REDACTED]")
+    .replace(/\\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16})\\b/g, "[REDACTED]")
+    .replace(/((?:TOKEN|PASSWORD|SECRET|API_KEY|PRIVATE_KEY)\\s*[:=]\\s*)[^\\r\\n]+/gi, "$1[REDACTED]");
+}
+async function fetchGithubBuildLogs(runId, env) {
+  const data = await githubApi("/actions/runs/" + encodeURIComponent(String(runId)) + "/jobs?per_page=100", env);
+  const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+  const failed = jobs.filter((job) => job.conclusion === "failure" || job.conclusion === "timed_out" || job.conclusion === "action_required");
+  const selected = (failed.length ? failed : jobs.filter((job) => job.status === "completed").slice(-3)).slice(0, 4);
+  if (!selected.length) return "GitHub Actions did not return completed job records for this run.";
+  const chunks = [];
+  for (const job of selected) {
+    try {
+      const owner = String(env.GITHUB_OWNER || "");
+      const repo = String(env.GITHUB_REPO || "");
+      const response = await fetch(API + "/repos/" + owner + "/" + repo + "/actions/jobs/" + encodeURIComponent(String(job.id)) + "/logs", {
+        headers: { Authorization: "Bearer " + env.GITHUB_SYNC_TOKEN, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+        redirect: "follow"
+      });
+      if (!response.ok) {
+        chunks.push("JOB " + String(job.name || job.id) + ": GitHub log request returned HTTP " + response.status + ".");
+        continue;
+      }
+      let text = await response.text();
+      if (text.startsWith("PK\\u0003\\u0004")) {
+        chunks.push("JOB " + String(job.name || job.id) + ": log archive was returned as ZIP; raw text logs were not available.");
+        continue;
+      }
+      text = redactBuildLogs(text);
+      chunks.push("JOB " + String(job.name || job.id) + " (" + String(job.conclusion || job.status || "unknown") + ")\\n" + text.slice(-9000));
+    } catch (error) {
+      chunks.push("JOB " + String(job.name || job.id) + ": could not fetch logs (" + String(error.message || error).slice(0, 200) + ").");
+    }
+  }
+  return chunks.join("\\n\\n").slice(-28000);
+}
+async function fetchChangedSourceFiles(commitSha, env) {
+  const commit = await githubApi("/commits/" + encodeURIComponent(commitSha), env);
+  const candidates = (Array.isArray(commit.files) ? commit.files : [])
+    .filter((file) => file.status !== "removed" && isAutoHealSourcePath(file.filename))
+    .slice(0, 24);
+  const files = [];
+  let totalChars = 0;
+  for (const file of candidates) {
+    const path = String(file.filename);
+    try {
+      const result = await githubApi("/contents/" + path.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(commitSha), env);
+      if (result.encoding !== "base64" || typeof result.content !== "string" || Number(result.size || 0) > 12000) continue;
+      const text = decodeGithubBase64(result.content);
+      if (text.includes("\\u0000") || text.length > 12000 || totalChars + text.length > 42000) continue;
+      files.push({ path, content: text });
+      totalChars += text.length;
+    } catch {
+      // A deleted, binary, too-large, or inaccessible file is not sent to the LLM.
+    }
+  }
+  return files;
+}
+function hexBytes(value) {
+  const clean = String(value || "").replace(/^sha256=/i, "").trim();
+  if (!/^[a-f0-9]{64}$/i.test(clean)) return null;
+  return Uint8Array.from(clean.match(/.{2}/g), (pair) => parseInt(pair, 16));
+}
+async function verifySelfHealHmac(rawBody, supplied, secret) {
+  const signature = hexBytes(supplied);
+  if (!signature || !secret) return false;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const expected = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody)));
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected[i] ^ signature[i];
+  return diff === 0;
+}
+async function handleSelfHealWebhook(request, env) {
+  const secret = String(env.SELF_HEAL_WEBHOOK_SECRET || "");
+  if (!secret) return json({ success: false, error: "self_heal_webhook_not_configured" }, 503);
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > 128 * 1024) return json({ success: false, error: "webhook_payload_too_large" }, 413);
+  if (!await verifySelfHealHmac(raw, request.headers.get("x-hendy-self-heal-signature"), secret)) return json({ success: false, error: "invalid_self_heal_signature" }, 401);
+  let payload;
+  try { payload = JSON.parse(raw || "{}"); } catch { return json({ success: false, error: "invalid_json" }, 400); }
+  const runId = Number(payload.runId || payload.workflow_run?.id || 0);
+  const commitSha = String(payload.commitSha || payload.workflow_run?.head_sha || "");
+  const sourceRef = String(payload.sourceRef || payload.workflow_run?.head_branch || "main");
+  const conclusion = String(payload.conclusion || payload.workflow_run?.conclusion || "");
+  if (!Number.isSafeInteger(runId) || runId <= 0 || !/^[a-f0-9]{40}$/i.test(commitSha)) return json({ success: false, error: "invalid_build_reference" }, 400);
+  if (!["failure", "timed_out"].includes(conclusion)) return json({ success: true, status: "skipped", reason: "build_is_not_failed" });
+  if (String(env.AUTO_HEAL_ENABLED || "") !== "true") return json({ success: true, status: "skipped", reason: "auto_heal_disabled" });
+  if (!env.DB) return json({ success: false, error: "d1_not_configured" }, 503);
+  const configuredBranch = String(env.GITHUB_BRANCH || "main");
+  if (sourceRef !== configuredBranch) return json({ success: true, status: "skipped", reason: "auto_heal_only_runs_on_configured_branch" });
+  const prior = await env.DB.prepare("SELECT id, status, patch_commit_sha FROM self_heal_attempts WHERE run_id = ?").bind(runId).first();
+  if (prior) return json({ success: true, status: prior.status, duplicate: true, patchCommitSha: prior.patch_commit_sha || "" });
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const budget = await env.DB.prepare("SELECT COUNT(*) AS total FROM self_heal_attempts WHERE created_at >= ?").bind(since).first();
+  if (Number(budget?.total || 0) >= 3) return json({ success: true, status: "rate_limited", reason: "maximum_three_auto_heal_attempts_per_hour" }, 429);
+  const auditId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO self_heal_attempts (id, run_id, commit_sha, source_ref, status, patch_count, patch_commit_sha, diagnostics_json, created_at) VALUES (?, ?, ?, ?, 'started', 0, '', '{}', ?)")
+    .bind(auditId, runId, commitSha, sourceRef, now).run();
+  try {
+    const logs = await fetchGithubBuildLogs(runId, env);
+    const files = await fetchChangedSourceFiles(commitSha, env);
+    if (!files.length) {
+      await env.DB.prepare("UPDATE self_heal_attempts SET status='skipped', diagnostics_json=?, completed_at=? WHERE id=?")
+        .bind(JSON.stringify({ reason: "no_eligible_changed_source_files", logSummary: logs.slice(-3000) }), new Date().toISOString(), auditId).run();
+      return json({ success: true, status: "skipped", reason: "no_eligible_changed_source_files" });
+    }
+    const diagnostics = [{ severity: "error", code: "GITHUB_ACTIONS_BUILD_FAILURE", message: logs }];
+    const proposal = await proposeSafePatches(files, diagnostics, env);
+    if (!proposal.patches.length) {
+      await env.DB.prepare("UPDATE self_heal_attempts SET status='skipped', diagnostics_json=?, completed_at=? WHERE id=?")
+        .bind(JSON.stringify({ summary: proposal.summary, diagnostics: diagnostics.map((d) => ({ code: d.code, severity: d.severity, logExcerpt: d.message.slice(-2500) })) }), new Date().toISOString(), auditId).run();
+      return json({ success: true, status: "skipped", reason: "llm_returned_no_safe_patch", summary: proposal.summary });
+    }
+    const committed = await syncFilesToGitHub(proposal.patches.map(({ path, content }) => ({ path, content })), env);
+    const completed = new Date().toISOString();
+    const report = {
+      summary: proposal.summary,
+      patches: proposal.patches.map((p) => ({ path: p.path, rationale: p.rationale })),
+      logExcerpt: logs.slice(-2500),
+      rebuildTriggered: true
+    };
+    await env.DB.prepare("UPDATE self_heal_attempts SET status='applied', patch_count=?, patch_commit_sha=?, diagnostics_json=?, completed_at=? WHERE id=?")
+      .bind(proposal.patches.length, committed.commitSha, JSON.stringify(report), completed, auditId).run();
+    return json({ success: true, status: "applied", runId, patchCount: proposal.patches.length, commitSha: committed.commitSha, commitUrl: committed.commitUrl, rebuildTriggered: true }, 201);
+  } catch (error) {
+    const message = String(error?.message || error).replace(/(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,})/g, "[REDACTED]").slice(0, 1000);
+    await env.DB.prepare("UPDATE self_heal_attempts SET status='failed', error_message=?, completed_at=? WHERE id=?")
+      .bind(message, new Date().toISOString(), auditId).run();
+    return json({ success: false, status: "failed", error: message }, 500);
+  }
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/$/, "") || "/";
@@ -264,6 +413,7 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/apps") return listPublicApps(env);
   if (request.method === "GET" && path === "/api/releases/ios-manifest") return iosManifest(url, env, request);
   if (request.method === "GET" && path === "/api/download") return downloadRelease(url, env);
+  if (request.method === "POST" && path === "/api/internal/self-heal") return handleSelfHealWebhook(request, env);
 
   const protectedPaths = path.startsWith("/api/admin/") || path === "/api/admin/status" || path === "/api/analyze" || path === "/api/github/sync" || path === "/api/releases/upload" || path === "/api/build/queue" || path === "/api/self-heal/llm";
   if (protectedPaths) {
