@@ -38,6 +38,13 @@ for (const path of [".github/workflows/deploy-render.yml", "server.ts", "src/App
 const root = readFileSync("wrangler.toml", "utf8");
 assert.match(root, /STATIC_ASSETS/);
 assert.match(root, /BACKEND_API/);
+assert.match(root, /not_found_handling = "none"/, "Worker assets must leave unmatched route handling to the router.");
+assert.match(root, /run_worker_first = \[\s*"\\/api\\*",\s*"\\/admin\\*",\s*"\\/web-admin\\/\\*"/s,
+  "Admin/API paths must run through the Worker before matching static files are served.");
+const deployWorkflow = readFileSync(".github/workflows/deploy-cloudflare.yml", "utf8");
+assert.match(deployWorkflow, /Verify Cloudflare API token/);
+assert.match(deployWorkflow, /--dry-run/, "Cloudflare Worker bundles should be validated before remote deployment.");
+assert.match(deployWorkflow, /Public Store with Admin locked/, "The workflow should keep Admin fail-closed when Access is not configured.");
 const apiConfig = readFileSync("workers/backend-api/wrangler.toml", "utf8");
 for (const binding of ["RELEASES_BUCKET", "DB", "CONFIG_CACHE", "BUILD_QUEUE"]) assert.ok(apiConfig.includes(binding), "Backend binding missing: " + binding);
 const matrix = readFileSync(".github/workflows/matrix-build.yml", "utf8");
@@ -47,6 +54,7 @@ assert.equal(/render[.]com/i.test(matrix), false, "Render deployment must remain
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 for (const dependency of ["libsodium-wrappers-sumo", "react", "react-dom"]) assert.ok(manifest.dependencies?.[dependency], "Root dependency missing: " + dependency);
 assert.ok(manifest.devDependencies?.esbuild, "esbuild is required to bundle the React Admin panels.");
+assert.equal(manifest.devDependencies?.wrangler, "4.152.0", "Pin Wrangler so Cloudflare's build image does not silently install a different CLI version.");
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
