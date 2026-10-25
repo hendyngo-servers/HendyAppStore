@@ -39,7 +39,7 @@ The Admin form contains exactly **26 core fields**. `BUILD_STATUS_WEBHOOK_URL` i
 
 | Name | Type | Purpose |
 |---|---|---|
-| `CLOUDFLARE_API_TOKEN` | Secret | Workers, Pages, R2, D1, KV and Queues permissions |
+| `CLOUDFLARE_API_TOKEN` | Required Secret | Active token with Workers Scripts Edit, Pages Edit, R2 Storage Edit, D1 Edit, Workers KV Storage Edit and Queues Edit (plus any account-level permissions needed to configure workers.dev) |
 | `CLOUDFLARE_ACCOUNT_ID` | Variable or Secret | 32-hex Cloudflare account ID |
 | `CF_ACCESS_TEAM_DOMAIN` | Variable or Secret | Access team host, e.g. `team-name.cloudflareaccess.com` |
 | `CF_ACCESS_AUD` | Variable or Secret | Comma-separated AUD tags used by the Access applications |
@@ -70,7 +70,7 @@ The provisioning workflow generates these endpoints on a `workers.dev` subdomain
 - Backend API: `https://hendy-app-store-api.<workers-subdomain>.workers.dev`
 - Alerts: `https://hendy-app-store-alerts.<workers-subdomain>.workers.dev/webhooks/github/build-status`
 
-After the first deploy, configure Cloudflare Zero Trust Access applications/policies for the Edge hostname and protect `/admin*`, `/web-admin/*`, and privileged `/api/*` paths. Allow only approved identities. The backend independently validates the Access JWT's RS256 signature, issuer, expiration, audience and email allow-list. Keep the Pages origin in `ALLOWED_ORIGINS`; add trusted custom domains there as needed.
+The Edge Worker is configured to run before static assets for `/admin*`, `/web-admin/*` and `/api*`, so a direct request to the Admin HTML bundle cannot bypass the router's authentication check. Configure Cloudflare Zero Trust Access applications/policies on the Edge hostname and allow only approved identities before sharing the Admin URL. The backend independently validates the Access JWT's RS256 signature, issuer, expiration, audience and email allow-list. Keep the deployed Pages hostname in `ALLOWED_ORIGINS`; the workflow derives this from the Pages project response unless you override it with a comma-separated variable.
 
 ## Source ingestion and self-healing
 
@@ -95,4 +95,4 @@ The Admin metadata form can save an HTTPS icon URL and up to eight HTTPS screens
 
 ## Deployment status notes
 
-The repository CI checks source structure, JavaScript syntax, unit/security-guard tests, and the public Pages bundle. A successful CI run does not mean Cloudflare is deployed: the deployment workflow requires the Cloudflare API token, account ID, Access team domain, AUD tags, and admin email allow-list. It fails closed before provisioning when any required setting is absent. Set those values under GitHub Actions Secrets/Variables and rerun **Deploy Hendy App Store to Cloudflare Workers and Pages**. The workflow currently expects Cloudflare Zero Trust Access applications/policies to be configured for the protected custom Edge/Admin hostname; the Worker validates the JWT and email allow-list independently.
+The repository CI checks source structure, JavaScript syntax, unit/security-guard tests and the public Pages bundle. The deployment workflow validates the pinned Wrangler CLI against all three Worker configurations before remote changes. A Cloudflare API token and 32-hex account ID are required to deploy. Access settings (`CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `CF_ACCESS_ADMIN_EMAILS`) are an all-or-none group: when omitted, the Public Store and Workers can deploy, but Admin APIs intentionally remain locked with a fail-closed response until the values are supplied. To enable Admin, configure all three values and rerun **Deploy Hendy App Store to Cloudflare Workers and Pages**; also create the corresponding Cloudflare Zero Trust Access applications/policies. CI success alone does not mean a deployment happened.
