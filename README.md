@@ -2,6 +2,12 @@
 
 Hendy App Store is a Cloudflare-first app storefront and source-to-release studio. It has separate Public Store and Access-gated Admin Studio frontends, an Edge Router, a Backend API, D1/KV/R2/Queues, a restricted source synchronizer, safe and optional LLM-assisted repair, cross-platform build jobs and store-upload workflows.
 
+## Triển khai Cloudflare
+
+Hướng dẫn chi tiết từng bước, quyền API token, cấu hình Workers Builds, workflow full-stack Workers + Pages và bảng xử lý lỗi nằm tại [docs/DEPLOY-CLOUDFLARE.md](docs/DEPLOY-CLOUDFLARE.md).
+
+**Khuyến nghị:** dùng GitHub Actions để điều phối triển khai production nhiều Worker + Pages; root `wrangler.toml` chỉ dành cho bootstrap Worker độc lập trên Workers Builds.
+
 ## Monorepo layout
 
 - `apps/web-user/`: Adaptive public storefront; Edge/Browser OS detection; validated platform download actions for Android APK, Windows EXE/MSI/ZIP, macOS DMG/PKG/ZIP and iOS OTA manifests; D1-backed app icons and screenshots.
