@@ -4,8 +4,8 @@ Hendy App Store is a Cloudflare-first app storefront and source-to-release studi
 
 ## Monorepo layout
 
-- `apps/web-user/`: Adaptive public storefront and platform-specific download actions for Android APK, Windows EXE/MSI/ZIP, macOS DMG/PKG/ZIP and iOS OTA manifests.
-- `apps/web-admin/`: Code paste zone, optional Monaco Editor, multi-file/folder uploader, virtual file tree, D1 metadata form, GitHub Actions monitor, build queue request, source analyzer and reviewed AI repair proposals.
+- `apps/web-user/`: Adaptive public storefront; Edge/Browser OS detection; validated platform download actions for Android APK, Windows EXE/MSI/ZIP, macOS DMG/PKG/ZIP and iOS OTA manifests; D1-backed app icons and screenshots.
+- `apps/web-admin/`: Code paste zone, optional Monaco Editor, multi-file/folder uploader, virtual file tree, D1 metadata form (HTTPS icon plus up to eight screenshots per app), GitHub Actions monitor, build queue request, R2 artifact draft intake, source analyzer and reviewed AI repair proposals.
 - `packages/shared-types/`: Shared AppData, ReleaseData and BuildLog types.
 - `packages/ui-components/`: Escaping, pill and bytes-format helpers shared by both UIs.
 - `workers/edge-router/`: Public entry, Admin routing and Backend service binding.
@@ -80,8 +80,17 @@ Automatic self-healing is disabled by default. To enable it, configure `LLM_API_
 
 ## Build and release workflow
 
-The matrix builds Android APK/AAB on Ubuntu, Windows EXE on Windows 2025, iOS IPA input on macOS, and a macOS DMG. Signing is separated from source build jobs. Only signature-verified products enter the `signed-build-*` artifacts and R2 public catalog. If a signing secret is missing, the job does not create a public catalog entry for an unsigned product.
+The matrix builds Android APK/AAB on Ubuntu, Windows EXE on Windows 2025, iOS IPA input on macOS, and a macOS DMG. Signing is separated from source build jobs. Only signature-verified products enter the `signed-build-*` artifacts and R2 public catalog. Android APK is the direct-install Store download; Android AAB stays as a Google Play release artifact and is not presented as an installable package. If a signing secret is missing, the job does not create a public catalog entry for an unsigned product. Admin's direct R2 upload is limited to 8 MiB and always creates a private draft; use the matrix/signing path for public releases and larger binaries.
 
 To build, open **Actions → Hendy App Store — Multi-OS Build Matrix**, run it manually, and set `publish_signed=true` only after signing secrets and the `release-signing` environment are configured. For Google Play or App Store Connect/TestFlight, run **Publish Hendy App Store to Google Play / App Store Connect** and select the successful matrix run ID containing the signed artifact. Developer portals, package IDs, store metadata, entitlements, certificates and approvals must be valid; CI cannot bypass vendor review requirements.
 
 The current native projects are launchers for the HTTPS storefront. They create genuine build artifacts when their toolchains are available, but they are not substitutes for a fully featured native app product or required developer-account configuration.
+
+
+## App metadata and media
+
+The Admin metadata form can save an HTTPS icon URL and up to eight HTTPS screenshot URLs per app. D1 stores screenshot records separately in `app_screenshots`; public app metadata responses include the validated media list. The Store uses the icon in the catalog card and shows screenshots in the app detail area. Insecure HTTP URLs, URL credentials, and non-HTTPS schemes are rejected. The Edge Router returns `X-Hendy-Client-OS` and `X-Hendy-Device-Class` headers; the browser repeats local detection (including iPadOS desktop-mode handling) to adapt the layout.
+
+## Deployment status notes
+
+The repository CI checks source structure, JavaScript syntax, unit/security-guard tests, and the public Pages bundle. A successful CI run does not mean Cloudflare is deployed: the deployment workflow requires the Cloudflare API token, account ID, Access team domain, AUD tags, and admin email allow-list. It fails closed before provisioning when any required setting is absent. Set those values under GitHub Actions Secrets/Variables and rerun **Deploy Hendy App Store to Cloudflare Workers and Pages**. The workflow currently expects Cloudflare Zero Trust Access applications/policies to be configured for the protected custom Edge/Admin hostname; the Worker validates the JWT and email allow-list independently.
