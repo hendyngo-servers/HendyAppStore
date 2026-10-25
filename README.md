@@ -23,6 +23,17 @@ Hướng dẫn chi tiết từng bước, quyền API token, cấu hình Workers
 - `.github/workflows/store-release.yml`: Manual gated upload to Google Play or App Store Connect/TestFlight.
 - `.github/workflows/deploy-cloudflare.yml`: Provision and deploy R2, Pages, D1, KV, Queues, API Worker, Alert Worker and Edge Router. No Render deployment code remains.
 
+## Monorepo and Pages Functions layout
+
+- `apps/web-user`: adaptive public Store UI and device-specific download components.
+- `apps/web-admin`: Admin Studio UI, including the automation secrets form and secure certificate uploader.
+- `functions/`: Cloudflare Pages Functions. `functions/_middleware.js` checks the Backend API's Cloudflare Access status before serving Admin routes; `functions/api/[[path]].js` proxies same-origin API calls to the Backend Worker; `auth.js` and `sync-logs.js` expose focused status endpoints.
+- `packages/shared-types`: reusable app metadata/types and validation helpers.
+- `packages/db-schema/migrations/0001_initial.sql`: canonical initial D1 schema migration, validated against the runtime schema.
+- Root `package.json`: npm workspaces for both apps and shared packages. `vite.config.ts` provides an optional multi-page Vite build; the production deployment continues to use the tested `npm run build` pipeline.
+
+The deployment workflow sets the Pages Functions runtime variable `HENDY_API_BASE_URL` from the provisioned Backend Worker URL. Configure Cloudflare Access so the Pages hostname is covered by an application/policy whose audience matches the Backend API's `CF_ACCESS_AUD`; otherwise the Pages middleware deliberately denies Admin access. Never expose Admin by removing the middleware or bypassing the Backend API Access check.
+
 ## Cloudflare dashboard build modes
 
 The root Wrangler file is deliberately a **standalone bootstrap** config for Cloudflare Workers Builds projects whose Worker name is `hendyappstore`. It deploys the edge router and static assets without a service binding, so the initial build does not fail when the Backend API has not been created yet. In that standalone mode, API and Admin requests return a fail-closed unavailable response until the integrated production Worker is deployed.
