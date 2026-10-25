@@ -33,6 +33,16 @@ jobs:
         run: npm test
       - name: Build public Pages bundle
         run: npm run build
+      - name: Render placeholder resource IDs for offline Wrangler validation
+        env:
+          D1_DATABASE_ID: "00000000-0000-0000-0000-000000000001"
+          KV_NAMESPACE_ID: "00000000000000000000000000000001"
+        run: node scripts/render-cloudflare-config.mjs
+      - name: Validate all Worker bundles without deploying
+        run: |
+          npx wrangler deploy --dry-run --config workers/backend-api/wrangler.toml
+          npx wrangler deploy --dry-run --config workers/alert-notifier/wrangler.toml
+          npx wrangler deploy --dry-run --config wrangler.toml
       - name: Verify output tree
         shell: bash
         run: |
