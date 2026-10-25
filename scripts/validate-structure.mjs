@@ -43,7 +43,8 @@ assert.ok(rootManifest.workspaces?.includes("packages/shared-types") && rootMani
 const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
 assert.match(deployEntry, /push:/);
 assert.match(deployEntry, /npx wrangler pages deploy/);
-assert.match(deployEntry, /--functions functions/, "The main deployment workflow must bundle Pages Functions.");
+assert.match(deployEntry, /wrangler pages deploy/);
+assert.ok(existsSync("functions/_middleware.js") && existsSync("functions/api/[[path]].js"), "Pages Functions source must be present for Wrangler's automatic Functions bundling.");
 assert.match(deployEntry, /HENDY_API_BASE_URL/);
 const pagesMiddleware = readFileSync("functions/_middleware.js", "utf8");
 assert.match(pagesMiddleware, /api\/admin\/status/);
