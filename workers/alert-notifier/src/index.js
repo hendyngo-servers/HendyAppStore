@@ -38,10 +38,16 @@ export default {
     const rawStatus = String(run.conclusion || run.status || "unknown");
     const statusMap = { success: "success", failure: "failed", timed_out: "failed", cancelled: "cancelled", queued: "queued", in_progress: "in_progress", skipped: "skipped" };
     const normalizedStatus = statusMap[rawStatus] || "unknown";
-    const id = String(run.id || payload.id || crypto.randomUUID());
+    const requestedBuildId = String(payload.build_request_id || "").trim();
+    const id = requestedBuildId || String(run.id || payload.id || crypto.randomUUID());
+    const now = new Date().toISOString();
     if (env.DB) {
-      await env.DB.prepare("INSERT INTO build_history (id, run_id, workflow, platform, status, commit_sha, requested_by, source_ref, created_at, started_at, completed_at, html_url, error_message) VALUES (?, ?, ?, 'matrix', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=excluded.status, completed_at=excluded.completed_at, html_url=excluded.html_url, error_message=excluded.error_message")
-        .bind(id, Number(run.id || 0), workflow, normalizedStatus, String(run.head_sha || ""), String(payload.sender?.login || ""), String(run.head_branch || "main"), new Date().toISOString(), run.run_started_at || null, run.updated_at || new Date().toISOString(), String(run.html_url || "").slice(0, 500), String(payload.error_message || "").slice(0, 1000)).run();
+      await env.DB.prepare("INSERT INTO build_history (id, run_id, workflow, platform, status, commit_sha, requested_by, source_ref, created_at, started_at, completed_at, html_url, error_message) VALUES (?, ?, ?, 'matrix', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET run_id=excluded.run_id, status=excluded.status, commit_sha=excluded.commit_sha, completed_at=excluded.completed_at, html_url=excluded.html_url, error_message=excluded.error_message")
+        .bind(id, Number(run.id || 0), workflow, normalizedStatus, String(run.head_sha || ""), String(payload.sender?.login || ""), String(run.head_branch || "main"), now, run.run_started_at || null, run.updated_at || now, String(run.html_url || "").slice(0, 500), String(payload.error_message || "").slice(0, 1000)).run();
+      if (requestedBuildId) {
+        await env.DB.prepare("INSERT INTO build_events (build_id, event_type, status, details_json, created_at) VALUES (?, 'callback', ?, ?, ?)")
+          .bind(requestedBuildId, normalizedStatus, JSON.stringify({ runId: Number(run.id || 0), workflow, commitSha: String(run.head_sha || ""), htmlUrl: String(run.html_url || "") }), now).run();
+      }
     }
     try { await notifyDiscord(env, { ...payload, workflow, conclusion: rawStatus, head_sha: run.head_sha, html_url: run.html_url }); } catch { /* notifications must not break the callback */ }
     return json({ ok: true, stored: !!env.DB, notified: !!env.DISCORD_WEBHOOK_URL });
