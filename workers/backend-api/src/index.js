@@ -256,7 +256,7 @@ async function dispatchBuildToGitHub(message, env) {
 }
 function isAutoHealSourcePath(path) {
   const value = String(path || "").replace(/\\\\/g, "/");
-  return /^(apps|workers|packages|scripts)\\//.test(value)
+  return /^(apps|workers|packages|scripts)\//.test(value)
     && /\\.(?:js|mjs|cjs|ts|tsx|jsx|css|html|sql)$/i.test(value)
     && !/(^|\\/)\\.github(\\/|$)/i.test(value)
     && !/(^|\\/)(node_modules|dist|coverage)(\\/|$)/i.test(value);
