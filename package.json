@@ -6,7 +6,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "validate": "node scripts/validate-structure.mjs",
-    "test": "node --test",
+    "test": "node --test tests/self-healing.test.mjs tests/github-sync.test.mjs tests/access.test.mjs",
     "build": "node scripts/build.mjs",
     "heal:check": "node workers/self-healing-bot/src/index.js --check",
     "heal:repair": "node workers/self-healing-bot/src/index.js --repair",
