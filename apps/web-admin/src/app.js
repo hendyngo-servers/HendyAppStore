@@ -197,6 +197,7 @@ function bindFileInputs() {
   $("#repair-btn").addEventListener("click", () => analyze(true));
   $("#sync-btn").addEventListener("click", syncToGitHub);
   $("#refresh-builds").addEventListener("click", refreshBuilds);
+  $("#request-build").addEventListener("click", enqueueBuild);
   $("#metadata-form").addEventListener("submit", saveMetadata);
 }
 async function apiRequest(path, options = {}) {
@@ -222,6 +223,18 @@ async function refreshBuilds() {
   } catch (error) {
     root.innerHTML = `<div class="tree-empty">Không thể đọc trạng thái build: ${esc(error.message)}. Kiểm tra GITHUB_SYNC_TOKEN.</div>`;
   }
+}
+async function enqueueBuild() {
+  const button = $("#request-build");
+  button.disabled = true;
+  setNotice("#build-request-output", "Đang gửi yêu cầu vào Cloudflare Queues…");
+  try {
+    const result = await apiRequest("/api/build/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ platform: "matrix", sourceRef: "main" }) });
+    setNotice("#build-request-output", `Đã tạo yêu cầu Build ${result.build?.id || ""}. Worker sẽ dispatch GitHub Actions.`);
+    await refreshBuilds();
+  } catch (error) {
+    setNotice("#build-request-output", `Không tạo được Build: ${error.message}. Kiểm tra D1, Queues và quyền Actions của GitHub token.`, false);
+  } finally { button.disabled = false; }
 }
 async function saveMetadata(event) {
   event.preventDefault();
