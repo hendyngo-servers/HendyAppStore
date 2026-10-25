@@ -69,3 +69,19 @@ CREATE TABLE IF NOT EXISTS source_sync_logs (
   created_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'success'
 );
+
+CREATE TABLE IF NOT EXISTS self_heal_attempts (
+  id TEXT PRIMARY KEY,
+  run_id INTEGER NOT NULL UNIQUE,
+  commit_sha TEXT NOT NULL,
+  source_ref TEXT NOT NULL DEFAULT 'main',
+  status TEXT NOT NULL CHECK (status IN ('started', 'proposed', 'applied', 'skipped', 'failed', 'rate_limited')),
+  patch_count INTEGER NOT NULL DEFAULT 0,
+  patch_commit_sha TEXT NOT NULL DEFAULT '',
+  diagnostics_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  completed_at TEXT,
+  error_message TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_self_heal_created_at ON self_heal_attempts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_self_heal_commit_sha ON self_heal_attempts(commit_sha);
