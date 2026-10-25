@@ -1,7 +1,6 @@
 name: Deploy Hendy App Store to Cloudflare Workers and Pages
 
 on:
-  workflow_call:
   workflow_dispatch:
 
 permissions:
