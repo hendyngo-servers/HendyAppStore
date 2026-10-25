@@ -44,7 +44,8 @@ Set these under **Settings → Secrets and variables → Actions**:
 | `CF_ACCESS_ADMIN_EMAILS` | Variable or Secret | Comma-separated Admin email allow-list |
 | `GITHUB_SYNC_TOKEN` | Secret | Fine-grained token with repository Contents read/write and Actions read/write for build dispatch |
 | `LLM_API_KEY` | Optional Secret | Enables AI repair proposals; omitted by default |
-| `AUTO_HEAL_ENABLED` | Variable or Secret | Set to `true` only after reviewing the automated source-sync policy |
+| `AUTO_HEAL_ENABLED` | Variable or Secret | Defaults to `false`; set to `true` to enable failure-triggered AI repair and reviewed source-only patches |
+| `SELF_HEAL_WEBHOOK_SECRET` | Optional Secret | Shared HMAC secret between Alert Worker and Backend API for the internal self-healing callback |
 | `BUILD_STATUS_WEBHOOK_SECRET` | Optional Secret | HMAC secret shared by the build-status callback and Alert Worker |
 | `BUILD_STATUS_WEBHOOK_URL` | Optional Secret | Deployed Alert Worker URL ending in `/webhooks/github/build-status` |
 | `DISCORD_WEBHOOK_URL` | Optional Secret | Discord build alerts |
@@ -72,6 +73,10 @@ After the first deploy, configure Cloudflare Zero Trust Access applications/poli
 ## Source ingestion and self-healing
 
 Admin uploads are treated as text data and are never executed by the API. The backend rejects path traversal, key/certificate/environment files, excessive file counts and oversized payloads. Source sync blocks `.github/workflows/` paths and credentials. Safe repair normalizes JSON/line endings and ignore rules. The optional LLM analyzer returns patches constrained to the uploaded source file list; Admin must review and explicitly apply a proposal before syncing it. Automatic LLM commits require `AUTO_HEAL_ENABLED=true` in Worker secrets and the route's explicit `apply` flag.
+
+## Automatic build-failure self-healing
+
+Automatic self-healing is disabled by default. To enable it, configure `LLM_API_KEY`, `GITHUB_SYNC_TOKEN`, and a strong `SELF_HEAL_WEBHOOK_SECRET`, then set `AUTO_HEAL_ENABLED=true`. The Alert Worker verifies the GitHub build callback, records the build status in D1, and invokes the Backend API over a service binding using an HMAC-signed payload. The Backend API fetches failed GitHub Actions job logs, redacts common credential patterns, reads only eligible source files changed by the failing commit, and requests a minimal LLM patch. It commits only safe source-code file changes; it never edits workflow/deployment files, dependency manifests, or tests. A successful patch push automatically triggers a fresh CI/matrix run. D1 records each attempt and caps automatic repair at three attempts per hour to avoid infinite repair loops. Missing LLM/GitHub credentials, unsafe/no-change patches, or a disabled flag prevent automatic commits.
 
 ## Build and release workflow
 
