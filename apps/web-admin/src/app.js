@@ -8,6 +8,7 @@ import { fullDevStudioLayout } from "./layouts/FullDevStudioLayout.js";
 import { AuthProvider } from "./providers/AuthProvider.js";
 import { buildStatusMonitor, renderBuildRows } from "./components/BuildStatusMonitor.js";
 import { storeMetadataForm } from "./components/StoreMetadataForm.js";
+import { artifactDraftForm } from "./components/ArtifactDraftForm.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 const blockedFileName = /(^|\/)(\.env(?:\..*)?|id_rsa|id_ed25519|credentials(?:\.json)?|secrets?\.json|.*\.(?:pem|key|p12|pfx|keystore|jks|mobileprovision))$/i;
@@ -28,6 +29,7 @@ function dashboardContent() {
       <section class="panel sync-panel"><div class="panel-heading"><div><p class="eyebrow">04 / GITHUB SYNC</p><h2>Đồng bộ mã nguồn</h2></div><span class="tag">COMMIT + CI</span></div><p class="panel-hint">Gửi tệp đã chọn tới GitHub qua Backend API. Token chỉ nằm ở Worker Secret. Push lên nhánh cấu hình sẽ kích hoạt GitHub Actions matrix build.</p><label class="check-line"><input type="checkbox" id="confirm-sync"> Tôi xác nhận các tệp trong cây là nội dung muốn commit lên GitHub.</label><button id="sync-btn" class="button primary wide" disabled>Đồng bộ lên GitHub & chạy CI</button><div id="sync-output" class="sync-output" aria-live="polite">Chưa thực hiện commit.</div></section>
     <div id="build-monitor-anchor">${buildStatusMonitor()}</div>
       ${storeMetadataForm()}
+      ${artifactDraftForm()}
     </div>
     <aside class="workspace-sidebar">
       <section id="tree" class="panel tree-panel"><div class="panel-heading"><div><p class="eyebrow">VIRTUAL FILE SYSTEM</p><h2>Cây thư mục</h2></div><span id="file-count" class="count-badge">0</span></div><div id="tree-summary" class="tree-summary">Chưa có tệp</div><div id="file-tree" class="file-tree"><div class="tree-empty">Thêm mã nguồn để dựng cấu trúc thư mục.</div></div><div class="tree-footer"><button id="clear-files" class="text-button">Xóa danh sách cục bộ</button></div></section>
@@ -208,6 +210,8 @@ function bindFileInputs() {
   $("#refresh-builds").addEventListener("click", refreshBuilds);
   $("#request-build").addEventListener("click", enqueueBuild);
   $("#metadata-form").addEventListener("submit", saveMetadata);
+  $("#artifact-upload-form").addEventListener("submit", uploadArtifactDraft);
+  $("#refresh-drafts").addEventListener("click", refreshReleaseDrafts);
 }
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, { credentials: "include", ...options, headers: { Accept: "application/json", ...(options.headers || {}) } });
@@ -274,6 +278,64 @@ async function enqueueBuild() {
     setNotice("#build-request-output", `Không tạo được Build: ${error.message}. Kiểm tra D1, Queues và quyền Actions của GitHub token.`, false);
   } finally { button.disabled = false; }
 }
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+  }
+  return btoa(binary);
+}
+async function refreshReleaseDrafts() {
+  const root = $("#artifact-draft-list");
+  if (!root) return;
+  root.innerHTML = '<div class="tree-empty">Đang tải bản nháp từ R2…</div>';
+  try {
+    const result = await apiRequest("/api/admin/releases");
+    const releases = Array.isArray(result.releases) ? result.releases : [];
+    root.innerHTML = releases.length ? releases.map((item) => {
+      const published = item.public === true;
+      return `<article class="artifact-draft-row"><div><strong>${esc(item.appName || "Hendy App")} · ${esc(item.version || "—")}</strong><span>${esc(item.platform || "unknown")} · ${esc(item.filename || "")} · ${bytes(Number(item.size || 0))}</span><small>SHA-256: ${esc(item.sha256 || "—")}</small><small>${esc(item.objectKey || "")}</small></div><span class="hendy-pill hendy-pill--${published ? "success" : "warning"}">${published ? "PUBLIC" : "DRAFT"}</span></article>`;
+    }).join("") : '<div class="tree-empty">R2 chưa có bản nháp hoặc bản phát hành.</div>';
+  } catch (error) {
+    root.innerHTML = `<div class="tree-empty">Không đọc được danh sách R2: ${esc(error.message)}.</div>`;
+  }
+}
+async function uploadArtifactDraft(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const file = $("#artifact-file").files?.[0];
+  const button = $("#artifact-upload-button");
+  if (!file) return setNotice("#artifact-upload-result", "Hãy chọn tệp binary trước khi tải lên.", false);
+  if (file.size <= 0 || file.size > 8 * 1024 * 1024) return setNotice("#artifact-upload-result", "Tệp phải lớn hơn 0 byte và không vượt quá 8 MiB. Tệp lớn hơn hãy dùng matrix build/R2 CLI.", false);
+  const ext = "." + file.name.split(".").pop().toLowerCase();
+  const platform = String(form.elements.platform.value);
+  const extensionMap = { android: [".apk", ".aab"], ios: [".ipa"], windows: [".exe", ".msi", ".msix", ".zip"], macos: [".dmg", ".pkg", ".zip"], web: [".zip"] };
+  if (!(extensionMap[platform] || []).includes(ext)) return setNotice("#artifact-upload-result", `Định dạng ${ext} không phù hợp nền tảng ${platform}.`, false);
+  button.disabled = true;
+  setNotice("#artifact-upload-result", "Đang đọc tệp và tải lên R2 dưới dạng nháp…");
+  try {
+    const contentBase64 = arrayBufferToBase64(await file.arrayBuffer());
+    const payload = {
+      appName: String(form.elements.appName.value || "").trim(),
+      version: String(form.elements.version.value || "").trim(),
+      platform,
+      description: String(form.elements.description.value || "").trim(),
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
+      contentBase64,
+      publish: false
+    };
+    const result = await apiRequest("/api/releases/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const release = result.release || {};
+    setNotice("#artifact-upload-result", `Đã tải ${release.filename || file.name} lên R2 dưới dạng DRAFT. SHA-256: ${release.sha256 || "không có"}; tệp chưa công khai.`);
+    form.reset();
+    form.elements.version.value = "1.0.0";
+    await refreshReleaseDrafts();
+  } catch (error) {
+    setNotice("#artifact-upload-result", `Tải lên thất bại: ${error.message}. Kiểm tra Access, R2 binding và giới hạn request.`, false);
+  } finally { button.disabled = false; }
+}
 async function saveMetadata(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -324,6 +386,8 @@ export function mountAdminStudio(root) {
   renderTree();
   checkAccess();
   refreshBuilds();
+  refreshReleaseDrafts();
+  window.setInterval(() => { refreshBuilds(); refreshReleaseDrafts(); }, 15000);
   window.addEventListener("resize", () => {
     const next = detectAdminDevice().mobile ? mobilePocketLayout(dashboardContent()) : fullDevStudioLayout(dashboardContent());
     // Avoid discarding active source data when viewport changes; only refresh the mode badge.
