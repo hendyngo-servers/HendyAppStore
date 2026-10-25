@@ -12,7 +12,7 @@ await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
 await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
 
 function normalizedOrigin(value) {
-  const raw = String(value || "").trim().replace(/\\/$/, "");
+  const raw = String(value || "").trim().replace(/\/$/, "");
   if (!raw) return "";
   let url;
   try { url = new URL(raw); } catch { throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be absolute HTTPS URLs."); }
@@ -27,7 +27,7 @@ const config = {
   apiBaseUrl: apiOrigin ? apiOrigin + "/api" : "/api",
   adminUrl: edgeOrigin ? edgeOrigin + "/admin" : "/admin"
 };
-await writeFile(`${output}/config.js`, `window.HENDY_CONFIG = Object.freeze(${JSON.stringify(config)});\\n`);
+await writeFile(`${output}/config.js`, `window.HENDY_CONFIG = Object.freeze(${JSON.stringify(config)});\n`);
 if (!existsSync(`${output}/web-user/src/app.js`)) throw new Error("Public app entry point was not copied.");
 if (!existsSync(`${output}/config.js`)) throw new Error("Runtime API config was not generated.");
 console.log(JSON.stringify({
