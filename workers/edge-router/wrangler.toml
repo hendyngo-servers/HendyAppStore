@@ -1,0 +1,20 @@
+# Integrated production Edge Router.
+# Deploy only after hendy-app-store-api has been deployed by deploy-cloudflare.yml.
+name = "hendy-app-store-edge"
+main = "./src/index.js"
+compatibility_date = "2026-10-25"
+workers_dev = true
+
+[assets]
+directory = "../../apps"
+binding = "STATIC_ASSETS"
+not_found_handling = "none"
+run_worker_first = ["/api*", "/admin*", "/web-admin/*"]
+
+[vars]
+APP_NAME = "Hendy App Store"
+ADMIN_HOSTNAMES = ""
+
+[[services]]
+binding = "BACKEND_API"
+service = "hendy-app-store-api"
