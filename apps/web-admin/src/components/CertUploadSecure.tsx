@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export type CertificateTarget =
   | "ANDROID_KEYSTORE_BASE64"
@@ -7,7 +7,7 @@ export type CertificateTarget =
   | "MACOS_CERTIFICATE_P12_BASE64"
   | "WINDOWS_CERT_PFX_BASE64";
 export type EncodedCertificate = { targetName: CertificateTarget; filename: string; size: number; sha256: string; base64: string };
-type Props = { onEncoded: (certificate: EncodedCertificate) => void; onClear: (targetName: CertificateTarget) => void; disabled?: boolean };
+type Props = { onEncoded: (certificate: EncodedCertificate) => void; onClear: (targetName: CertificateTarget) => void; resetKey?: number; disabled?: boolean };
 const TARGETS: { value: CertificateTarget; label: string; extensions: string[] }[] = [
   { value: "ANDROID_KEYSTORE_BASE64", label: "Android Keystore", extensions: [".jks", ".keystore"] },
   { value: "IOS_CERTIFICATE_P12_BASE64", label: "iOS Distribution Certificate", extensions: [".p12"] },
@@ -31,12 +31,20 @@ async function sha256(buffer: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-export function CertUploadSecure({ onEncoded, onClear, disabled = false }: Props) {
+export function CertUploadSecure({ onEncoded, onClear, resetKey = 0, disabled = false }: Props) {
   const [targetName, setTargetName] = useState<CertificateTarget>("ANDROID_KEYSTORE_BASE64");
   const [file, setFile] = useState<File | null>(null);
   const [certificate, setCertificate] = useState<EncodedCertificate | null>(null);
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const target = TARGETS.find((item) => item.value === targetName)!;
+
+  useEffect(() => {
+    setCertificate(null);
+    setFile(null);
+    setError("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [resetKey]);
 
   async function prepare() {
     setError("");
@@ -62,7 +70,7 @@ export function CertUploadSecure({ onEncoded, onClear, disabled = false }: Props
     <p className="panel-hint">Base64 chỉ là mã hóa biểu diễn, không phải mã hóa mật mã. Tệp được đọc trong bộ nhớ trình duyệt; giá trị chỉ gửi tới Worker sau khi bấm Đồng bộ và được Worker mã hóa theo public key GitHub trước khi lưu Secret.</p>
     <div className="certificate-fields">
       <label>Đích lưu GitHub Secret<select value={targetName} disabled={disabled} onChange={(e) => { if (certificate) onClear(certificate.targetName); setTargetName(e.target.value as CertificateTarget); setCertificate(null); setFile(null); setError(""); }}><option value="ANDROID_KEYSTORE_BASE64">ANDROID_KEYSTORE_BASE64 · .jks/.keystore</option><option value="IOS_CERTIFICATE_P12_BASE64">IOS_CERTIFICATE_P12_BASE64 · .p12</option><option value="IOS_PROVISION_PROFILE_BASE64">IOS_PROVISION_PROFILE_BASE64 · .mobileprovision</option><option value="MACOS_CERTIFICATE_P12_BASE64">MACOS_CERTIFICATE_P12_BASE64 · .p12</option><option value="WINDOWS_CERT_PFX_BASE64">WINDOWS_CERT_PFX_BASE64 · .pfx</option></select></label>
-      <label className="cert-file-input">Chọn tệp chứng chỉ<input type="file" disabled={disabled} accept={target.extensions.join(",")} onChange={(e) => { setFile(e.target.files?.[0] || null); setCertificate(null); setError(""); }} /></label>
+      <label className="cert-file-input">Chọn tệp chứng chỉ<input ref={fileInputRef} type="file" disabled={disabled} accept={target.extensions.join(",")} onChange={(e) => { setFile(e.target.files?.[0] || null); setCertificate(null); setError(""); }} /></label>
     </div>
     <button type="button" className="button secondary" disabled={disabled || !file} onClick={() => void prepare()}>Kiểm tra & tạo Base64</button>
     {error && <p className="automation-error" role="alert">{error}</p>}
