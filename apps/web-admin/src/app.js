@@ -9,6 +9,8 @@ import { fullDevStudioLayout } from "./layouts/FullDevStudioLayout.js";
 const MAX_FILE_BYTES = 1024 * 1024;
 const blockedFileName = /(^|\/)(\.env(?:\..*)?|id_rsa|id_ed25519|credentials(?:\.json)?|secrets?\.json|.*\.(?:pem|key|p12|pfx|keystore|jks|mobileprovision))$/i;
 const state = { files: new Map(), lastReport: null };
+let monacoEditor = null;
+let monacoLoading = false;
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const $ = (selector) => document.querySelector(selector);
 
@@ -83,11 +85,92 @@ function walkEntry(entry) {
   };
   return readAll();
 }
+function currentSourceCode() {
+  return monacoEditor ? monacoEditor.getValue() : $("#source-code").value;
+}
+function enableMonacoEditor() {
+  if (monacoEditor) return;
+  if (monacoLoading) return;
+  monacoLoading = true;
+  const status = $("#editor-status");
+  const button = $("#enable-monaco");
+  status.textContent = "Đang tải Monaco Editor từ CDN…";
+  button.disabled = true;
+  const loaderUrl = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js";
+  const start = () => {
+    if (!window.require?.config) throw new Error("AMD loader của Monaco không sẵn sàng.");
+    window.require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" } });
+    window.require(["vs/editor/editor.main"], () => {
+      const host = $("#monaco-host");
+      const textarea = $("#source-code");
+      monacoEditor = window.monaco.editor.create(host, {
+        value: textarea.value,
+        language: "javascript",
+        theme: "vs-dark",
+        automaticLayout: true,
+        minimap: { enabled: false },
+        fontSize: 12,
+        tabSize: 2,
+        wordWrap: "on",
+        scrollBeyondLastLine: false,
+        accessibilitySupport: "auto"
+      });
+      textarea.hidden = true;
+      host.hidden = false;
+      monacoEditor.onDidChangeModelContent(() => {
+        const value = monacoEditor.getValue();
+        $("#editor-count").textContent = `${value.length.toLocaleString()} ký tự`;
+        // Keep textarea synchronized so there's always a plain-text fallback value.
+        textarea.value = value;
+      });
+      status.textContent = "Monaco Editor sẵn sàng · nếu CDN không khả dụng, dùng editor văn bản.";
+      button.textContent = "Monaco đã bật";
+      button.disabled = true;
+      monacoLoading = false;
+    }, () => {
+      throw new Error("Không tải được module Monaco Editor.");
+    });
+  };
+  if (window.require?.config) {
+    try { start(); } catch (error) { monacoLoading = false; button.disabled = false; status.textContent = "Monaco không khả dụng: " + error.message + ". Vẫn có thể dùng editor văn bản."; }
+    return;
+  }
+  let script = document.querySelector('script[data-hendy-monaco-loader="true"]');
+  if (!script) {
+    script = document.createElement("script");
+    script.src = loaderUrl;
+    script.async = true;
+    script.dataset.hendyMonacoLoader = "true";
+    document.head.appendChild(script);
+  }
+  const timer = setTimeout(() => {
+    if (!window.require?.config) {
+      monacoLoading = false;
+      button.disabled = false;
+      status.textContent = "Không kết nối được CDN Monaco. Editor văn bản vẫn dùng được.";
+    }
+  }, 12000);
+  script.addEventListener("load", () => {
+    clearTimeout(timer);
+    try { start(); } catch (error) {
+      monacoLoading = false;
+      button.disabled = false;
+      status.textContent = "Monaco không khởi tạo được: " + error.message + ". Vẫn có thể dùng editor văn bản.";
+    }
+  }, { once: true });
+  script.addEventListener("error", () => {
+    clearTimeout(timer);
+    monacoLoading = false;
+    button.disabled = false;
+    status.textContent = "Không tải được CDN Monaco. Editor văn bản vẫn dùng được.";
+  }, { once: true });
+}
 function bindFileInputs() {
   $("#source-code").addEventListener("input", (e) => { $("#editor-count").textContent = `${e.target.value.length.toLocaleString()} ký tự`; });
+  $("#enable-monaco").addEventListener("click", enableMonacoEditor);
   $("#add-source").addEventListener("click", () => {
     try {
-      addFile($("#source-path").value, $("#source-code").value);
+      addFile($("#source-path").value, currentSourceCode());
       renderTree(); setNotice("#upload-result", "Đã thêm tệp vào cây thư mục.");
     } catch (error) { setNotice("#upload-result", error.message, false); }
   });
@@ -103,7 +186,7 @@ function bindFileInputs() {
   });
   drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") $("#file-picker").click(); });
   $("#confirm-sync").addEventListener("change", renderTree);
-  $("#clear-files").addEventListener("click", () => { state.files.clear(); $("#source-code").value = ""; renderTree(); setNotice("#upload-result", "Đã xóa danh sách tệp cục bộ."); });
+  $("#clear-files").addEventListener("click", () => { state.files.clear(); $("#source-code").value = ""; if (monacoEditor) monacoEditor.setValue(""); renderTree(); setNotice("#upload-result", "Đã xóa danh sách tệp cục bộ."); });
   $("#analyze-btn").addEventListener("click", () => analyze(false));
   $("#repair-btn").addEventListener("click", () => analyze(true));
   $("#sync-btn").addEventListener("click", syncToGitHub);
