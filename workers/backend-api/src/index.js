@@ -285,7 +285,7 @@ function normalizeAutomationValues(values) {
   for (const [name, input] of Object.entries(values)) {
     if (typeof input !== "string") throw new Error(name + " must be a string.");
     if (input.trim() === "") continue;
-    if (input.includes("\\u0000")) throw new Error(name + " contains an invalid NUL character.");
+    if (input.includes("\u0000")) throw new Error(name + " contains an invalid NUL character.");
     let value = input;
     if (name === "AUTO_HEAL_ENABLED" && value !== "true" && value !== "false") throw new Error("AUTO_HEAL_ENABLED must be true or false.");
     if (name.endsWith("_BASE64")) {
