@@ -129,6 +129,7 @@ jobs:
         id: pages
         env:
           HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
+          HENDY_EDGE_BASE_URL: ${{ steps.provision.outputs.edge_base }}
         run: node scripts/prepare-pages.mjs
       - name: Deploy public storefront to Cloudflare Pages
         env:
