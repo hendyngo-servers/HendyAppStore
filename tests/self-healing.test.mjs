@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeProjectFiles } from "../workers/self-healing-bot/src/index.js";
+import { isSafePatchPath } from "../workers/self-healing-bot/src/llm-analyzer.js";
 
 test("repairs a missing Node engine range and adds safe ignore rules", () => {
   const result = analyzeProjectFiles([{ path: "package.json", content: JSON.stringify({ name: "sample", scripts: { test: "node --test" } }) }], { repair: true });
@@ -30,4 +31,13 @@ test("reports invalid package JSON instead of rewriting it", () => {
 test("normalizes CRLF as a deterministic repair", () => {
   const result = analyzeProjectFiles([{ path: "apps/web-user/a.js", content: "line1\r\nline2\r\n" }], { repair: true });
   assert.equal(result.files.find((f) => f.path.endsWith("a.js")).content, "line1\nline2\n");
+});
+
+test("AI patch paths are restricted to safe source files", () => {
+  assert.equal(isSafePatchPath("apps/web-admin/src/app.js"), true);
+  assert.equal(isSafePatchPath("workers/backend-api/src/index.ts"), true);
+  assert.equal(isSafePatchPath(".github/workflows/matrix-build.yml"), false);
+  assert.equal(isSafePatchPath("tests/self-healing.test.mjs"), false);
+  assert.equal(isSafePatchPath("workers/backend-api/wrangler.toml"), false);
+  assert.equal(isSafePatchPath("package.json"), false);
 });
