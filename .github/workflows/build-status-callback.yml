@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Post signed build status callback
         env:
-          BUILD_STATUS_WEBHOOK_URL: ${{ secrets.BUILD_STATUS_WEBHOOK_URL }}
+          BUILD_STATUS_WEBHOOK_URL: ${{ vars.BUILD_STATUS_WEBHOOK_URL || secrets.BUILD_STATUS_WEBHOOK_URL }}
           BUILD_STATUS_WEBHOOK_SECRET: ${{ secrets.BUILD_STATUS_WEBHOOK_SECRET }}
           RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
           RUN_STATUS: ${{ github.event.workflow_run.status || 'completed' }}
