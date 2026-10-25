@@ -38,9 +38,17 @@ if (!buckets.some((bucket) => bucket.name === "hendy-app-store-releases")) {
 }
 
 const pages = list(await api(`/accounts/${account}/pages/projects`), ["projects"]);
-if (!pages.some((project) => project.name === "hendy-app-store")) {
-  await api(`/accounts/${account}/pages/projects`, { method: "POST", body: JSON.stringify({ name: "hendy-app-store", production_branch: "main" }) });
+let pagesProject = pages.find((project) => project.name === "hendy-app-store");
+if (!pagesProject) {
+  pagesProject = await api(`/accounts/${account}/pages/projects`, { method: "POST", body: JSON.stringify({ name: "hendy-app-store", production_branch: "main" }) });
   console.log("Created Cloudflare Pages project hendy-app-store");
+}
+const pagesDomain = String(pagesProject?.subdomain || "hendy-app-store.pages.dev")
+  .replace(/^https?:\/\//i, "")
+  .replace(/\/.*$/, "")
+  .toLowerCase();
+if (!/^[a-z0-9.-]+$/.test(pagesDomain) || !pagesDomain.endsWith(".pages.dev")) {
+  throw new Error("Cloudflare Pages project returned an invalid pages.dev hostname.");
 }
 
 const databases = list(await api(`/accounts/${account}/d1/database`), ["databases"]);
@@ -69,10 +77,26 @@ for (const queueName of ["hendy-app-store-builds", "hendy-app-store-builds-dlq"]
   }
 }
 let subdomain = "";
-try { const result = await api(`/accounts/${account}/workers/subdomain`); subdomain = String(result.subdomain || ""); } catch { /* account may not have a workers.dev name yet */ }
+try {
+  const result = await api(`/accounts/${account}/workers/subdomain`);
+  subdomain = String(result.subdomain || "");
+} catch { /* If no workers.dev subdomain exists, attempt to create one below. */ }
 if (!subdomain) {
-  const result = await api(`/accounts/${account}/workers/subdomain`, { method: "PUT", body: JSON.stringify({ subdomain: "hendyappstore" }) });
-  subdomain = String(result.subdomain || "hendyappstore");
+  const candidates = ["hendyappstore", `hendyappstore-${account.slice(0, 6).toLowerCase()}`];
+  let lastError;
+  for (const candidate of candidates) {
+    try {
+      const result = await api(`/accounts/${account}/workers/subdomain`, {
+        method: "PUT",
+        body: JSON.stringify({ subdomain: candidate })
+      });
+      subdomain = String(result.subdomain || candidate);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!subdomain) throw new Error("Unable to enable workers.dev subdomain. Check Workers Scripts permissions and choose an available subdomain. " + String(lastError?.message || ""));
 }
 if (!/^[a-z0-9-]+$/i.test(subdomain)) throw new Error("Cloudflare returned an invalid workers.dev subdomain.");
 
@@ -83,7 +107,7 @@ const values = {
   api_base: `https://hendy-app-store-api.${subdomain}.workers.dev`,
   edge_base: `https://hendy-app-store-edge.${subdomain}.workers.dev`,
   alerts_base: `https://hendy-app-store-alerts.${subdomain}.workers.dev`,
-  pages_base: "https://hendy-app-store.pages.dev"
+  pages_base: `https://${pagesDomain}`
 };
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n");
 console.log(JSON.stringify({ resources: ["R2:hendy-app-store-releases", "Pages:hendy-app-store", "D1:hendy-app-store-db", "KV:hendy-app-store-config", "Queue:hendy-app-store-builds", "Queue:hendy-app-store-builds-dlq"], workerUrls: { api: values.api_base, edge: values.edge_base, alerts: values.alerts_base }, d1Id, kvId, workersSubdomain: subdomain }, null, 2));
