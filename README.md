@@ -65,7 +65,7 @@ Configure GitHub environments `cloudflare-production`, `release-signing`, and `s
 ## Cloudflare Access and routing
 
 The provisioning workflow generates these endpoints on a `workers.dev` subdomain:
-- Public storefront: `https://hendy-app-store.pages.dev`
+- Public storefront: the Pages hostname emitted in the deployment summary (normally `https://hendy-app-store.pages.dev`; a unique fallback name is used if that subdomain is already taken globally)
 - Edge/Admin entry: `https://hendy-app-store-edge.<workers-subdomain>.workers.dev/admin`
 - Backend API: `https://hendy-app-store-api.<workers-subdomain>.workers.dev`
 - Alerts: `https://hendy-app-store-alerts.<workers-subdomain>.workers.dev/webhooks/github/build-status`
