@@ -9,6 +9,7 @@ test("renders Android and Windows links only when an artifact exists", () => {
   const android = renderPlatformDownloadActions({ platform: "android", filename: "app.apk", downloadUrl: "https://example.test/app.apk" });
   assert.match(android, /Tải APK/);
   assert.match(android, /rel="noopener noreferrer"/);
+  assert.match(renderPlatformDownloadActions({ platform: "android", filename: "bundle.aab", downloadUrl: "https://example.test/bundle.aab" }), /chỉ dành cho phát hành qua Google Play/i);
   assert.match(renderPlatformDownloadActions({ platform: "android" }), /Chưa có APK/);
   assert.match(renderWindowsSafeInstaller({ platform: "windows", filename: "setup.exe", downloadUrl: "https://example.test/setup.exe" }), /Tải Windows/);
   assert.match(renderWindowsSafeInstaller({ platform: "windows", filename: "setup.zip.exe.exe", downloadUrl: "https://example.test/setup.exe" }), /Tải Windows/);

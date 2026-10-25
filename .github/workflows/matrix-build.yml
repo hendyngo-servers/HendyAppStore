@@ -351,7 +351,7 @@ jobs:
             echo "Published $platform artifact $filename to R2 after signature verification."
           }
           publish_one android release-artifacts/signed-build-android/android.apk android.apk application/vnd.android.package-archive
-          publish_one android release-artifacts/signed-build-android/android.aab android.aab application/octet-stream
+          # AAB remains a GitHub release artifact for Google Play upload; it is not a direct-install Store download.
           publish_one windows release-artifacts/signed-build-windows/windows.exe windows.exe application/vnd.microsoft.portable-executable
           publish_one ios release-artifacts/signed-build-ios/ios.ipa ios.ipa application/octet-stream
           publish_one macos release-artifacts/signed-build-macos/macos.dmg macos.dmg application/x-apple-diskimage

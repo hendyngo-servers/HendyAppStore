@@ -86,6 +86,8 @@ async function listCatalog(env) {
     for (const item of page.objects || []) {
       const metadata = await readCatalogObject(env.RELEASES_BUCKET, item.key);
       if (!metadata || metadata.public !== true || !metadata.objectKey || !String(metadata.objectKey).startsWith("artifacts/")) continue;
+      // Android App Bundles are for store distribution, not direct package installation.
+      if (metadata.platform === "android" && /\.aab$/i.test(String(metadata.filename || ""))) continue;
       releases.push(metadata);
     }
     cursor = page.truncated ? page.cursor : undefined;
