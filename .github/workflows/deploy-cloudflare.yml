@@ -71,6 +71,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/provision-cloudflare-resources.mjs
+      - name: Sync derived build callback URL to GitHub Actions Variables
+        env:
+          GITHUB_SYNC_TOKEN: ${{ secrets.GITHUB_SYNC_TOKEN }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          BUILD_STATUS_WEBHOOK_URL: ${{ steps.provision.outputs.alerts_base }}/webhooks/github/build-status
+        run: node scripts/sync-github-variable.mjs
+        continue-on-error: true
       - name: Render runtime D1/KV bindings into Wrangler configs
         env:
           D1_DATABASE_ID: ${{ steps.provision.outputs.d1_id }}
