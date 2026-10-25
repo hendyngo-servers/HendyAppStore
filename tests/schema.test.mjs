@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 
 test("D1 schema contains app, build, event and release tables", () => {
   const sql = readFileSync("workers/backend-api/src/db/schema.sql", "utf8");
-  for (const name of ["apps", "build_history", "build_events", "release_metadata", "source_sync_logs"]) {
+  for (const name of ["apps", "build_history", "build_events", "release_metadata", "source_sync_logs", "self_heal_attempts"]) {
     assert.match(sql, new RegExp("CREATE TABLE IF NOT EXISTS " + name));
   }
 });
