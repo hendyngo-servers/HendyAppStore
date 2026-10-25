@@ -81,3 +81,11 @@
 .certificate-result small{font-size:9px;color:#91a8c2;line-height:1.6}
 .certificate-result code{word-break:break-all}
 @media(max-width:700px){.automation-fields,.cert-upload-secure .certificate-fields{grid-template-columns:minmax(0,1fr)}.callback-status{flex-direction:column}.automation-summary{align-items:flex-start}.automation-actions .button{width:100%}}
+
+.automation-deploy-option{display:flex;align-items:flex-start;gap:10px;margin:14px 0 4px;padding:12px;border:1px solid #385a73;border-radius:10px;background:#0a1724;color:#c9d8eb;cursor:pointer}
+.automation-deploy-option input{accent-color:var(--mint);margin:3px 0 0;flex:0 0 auto}
+.automation-deploy-option span{display:grid;gap:5px}
+.automation-deploy-option strong{font-size:10px;color:#a2f0dc}
+.automation-deploy-option small{font-size:9px;line-height:1.6;color:#8da2bf}
+.automation-deploy-link a{color:var(--mint);font-size:10px;text-decoration:none}
+.automation-deploy-link a:hover{text-decoration:underline}
