@@ -214,7 +214,7 @@ jobs:
 
   sign:
     name: Sign and verify / ${{ matrix.target }}
-    needs: build
+    needs: [detect-targets, build]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_signed == true }}
     runs-on: ${{ matrix.runner }}
     environment: release-signing
