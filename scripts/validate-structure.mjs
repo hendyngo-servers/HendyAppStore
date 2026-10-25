@@ -83,7 +83,7 @@ function walk(dir) {
     return entry.isDirectory() ? walk(path) : [path];
   });
 }
-const sourceFiles = ["apps", "workers", "scripts", "tests", "packages", "automation"].flatMap(walk).filter((path) => /\.(?:js|mjs|cjs)$/.test(path));
+const sourceFiles = ["apps", "functions", "workers", "scripts", "tests", "packages", "automation"].flatMap(walk).filter((path) => /\.(?:js|mjs|cjs)$/.test(path));
 for (const path of sourceFiles) {
   try { execFileSync(process.execPath, ["--check", path], { stdio: "pipe" }); }
   catch (error) {
