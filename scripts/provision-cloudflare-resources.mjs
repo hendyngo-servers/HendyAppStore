@@ -43,10 +43,11 @@ if (!pagesProject) {
   pagesProject = await api(`/accounts/${account}/pages/projects`, { method: "POST", body: JSON.stringify({ name: "hendy-app-store", production_branch: "main" }) });
   console.log("Created Cloudflare Pages project hendy-app-store");
 }
-const pagesDomain = String(pagesProject?.subdomain || "hendy-app-store.pages.dev")
+const rawPagesDomain = String(pagesProject?.subdomain || "hendy-app-store.pages.dev")
   .replace(/^https?:\/\//i, "")
   .replace(/\/.*$/, "")
   .toLowerCase();
+const pagesDomain = rawPagesDomain.endsWith(".pages.dev") ? rawPagesDomain : rawPagesDomain + ".pages.dev";
 if (!/^[a-z0-9.-]+$/.test(pagesDomain) || !pagesDomain.endsWith(".pages.dev")) {
   throw new Error("Cloudflare Pages project returned an invalid pages.dev hostname.");
 }
