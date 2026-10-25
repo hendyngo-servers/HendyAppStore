@@ -356,3 +356,55 @@ jobs:
           publish_one ios release-artifacts/signed-build-ios/ios.ipa ios.ipa application/octet-stream
           publish_one macos release-artifacts/signed-build-macos/macos.dmg macos.dmg application/x-apple-diskimage
           echo "Published $count verified artifact(s). No unsigned output was made public."
+
+  build-status-notify:
+    name: Callback build result to Admin D1
+    needs: build
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send signed result callback
+        env:
+          BUILD_STATUS_WEBHOOK_URL: ${{ secrets.BUILD_STATUS_WEBHOOK_URL }}
+          BUILD_STATUS_WEBHOOK_SECRET: ${{ secrets.BUILD_STATUS_WEBHOOK_SECRET }}
+          BUILD_REQUEST_ID: ${{ inputs.build_id != 'manual' && inputs.build_id || '' }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_CONCLUSION: ${{ needs.build.result }}
+          RUN_SHA: ${{ github.sha }}
+          RUN_BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${BUILD_STATUS_WEBHOOK_URL:-}" ] || [ -z "${BUILD_STATUS_WEBHOOK_SECRET:-}" ]; then
+            echo "::warning::Build callback secrets are not configured; GitHub Actions still records the run status."
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import { createHmac } from "node:crypto";
+          const now = new Date().toISOString();
+          const data = {
+            build_request_id: process.env.BUILD_REQUEST_ID || "",
+            workflow: { name: process.env.WORKFLOW_NAME || "Hendy App Store — Multi-OS Build Matrix" },
+            workflow_run: {
+              id: Number(process.env.RUN_ID || 0),
+              status: "completed",
+              conclusion: process.env.RUN_CONCLUSION || "unknown",
+              head_sha: process.env.RUN_SHA || "",
+              head_branch: process.env.RUN_BRANCH || "main",
+              html_url: process.env.RUN_URL || "",
+              run_started_at: now,
+              updated_at: now
+            }
+          };
+          const body = JSON.stringify(data);
+          const signature = "sha256=" + createHmac("sha256", process.env.BUILD_STATUS_WEBHOOK_SECRET).update(body).digest("hex");
+          const response = await fetch(process.env.BUILD_STATUS_WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-hendy-signature-256": signature },
+            body
+          });
+          if (!response.ok) throw new Error("Build status callback failed with HTTP " + response.status + ": " + (await response.text()).slice(0, 500));
+          console.log("Build status callback accepted by the Admin notifier.");
+          NODE
