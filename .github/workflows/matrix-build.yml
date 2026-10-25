@@ -36,11 +36,11 @@ on:
         type: string
         default: manual
       target:
-        description: "Requested target (the matrix currently builds all supported targets)"
-        required: false
+        description: "Automatically detect changed native targets, or select a specific platform"
+        required: true
         type: choice
-        options: [all, android, windows, ios, macos]
-        default: all
+        options: [auto, all, android, windows, ios, macos]
+        default: auto
 
 permissions:
   contents: read
@@ -51,22 +51,85 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  detect-targets:
+    name: Detect build targets from changed source
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      targets: ${{ steps.select.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect targets
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_TARGET: ${{ inputs.target || 'auto' }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+          CURRENT_SHA: ${{ github.sha }}
+          BASE_REF: ${{ github.base_ref || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          all_targets="android,windows,ios,macos"
+          requested="$REQUESTED_TARGET"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$requested" != "auto" ]]; then
+            selected="$all_targets"
+            if [[ "$requested" != "all" ]]; then selected="$requested"; fi
+          else
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              git fetch origin "$BASE_REF"
+              changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+            elif [[ "$EVENT_NAME" == "push" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+              changed="$(git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA")"
+            else
+              changed="ALL_SOURCE"
+            fi
+            android=false; windows=false; ios=false; macos=false; common=false
+            while IFS= read -r path; do
+              [[ -z "$path" ]] && continue
+              case "$path" in
+                android/*) android=true ;;
+                windows/*) windows=true ;;
+                ios/*) ios=true ;;
+                macos/*) macos=true ;;
+                apps/*|workers/*|packages/*|scripts/*|tests/*|automation/*|package.json|package-lock.json|wrangler.toml|.github/workflows/matrix-build.yml|ALL_SOURCE) common=true ;;
+              esac
+            done <<< "$changed"
+            if [[ "$common" == "true" ]]; then
+              selected="$all_targets"
+            else
+              selected=""
+              [[ "$android" == "true" ]] && selected="${selected:+$selected,}android"
+              [[ "$windows" == "true" ]] && selected="${selected:+$selected,}windows"
+              [[ "$ios" == "true" ]] && selected="${selected:+$selected,}ios"
+              [[ "$macos" == "true" ]] && selected="${selected:+$selected,}macos"
+              [[ -n "$selected" ]] || selected="$all_targets"
+            fi
+          fi
+          MATRIX_TARGETS="$selected" node --input-type=module <<'NODE'
+          import { appendFileSync } from "node:fs";
+          const runners = { android: "ubuntu-latest", windows: "windows-2025", ios: "macos-latest", macos: "macos-latest" };
+          const targets = [...new Set(String(process.env.MATRIX_TARGETS || "android,windows,ios,macos").split(","))];
+          const selected = targets.filter((target) => Object.hasOwn(runners, target));
+          if (!selected.length) throw new Error("No supported build target was selected.");
+          const matrix = { include: selected.map((target) => ({ target, runner: runners[target] })) };
+          appendFileSync(process.env.GITHUB_OUTPUT, "targets=" + selected.join(",") + "
+matrix=" + JSON.stringify(matrix) + "
+");
+          NODE
+
   build:
     name: Build / ${{ matrix.target }}
+    needs: detect-targets
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: android
-            runner: ubuntu-latest
-          - target: windows
-            runner: windows-2025
-          - target: ios
-            runner: macos-latest
-          - target: macos
-            runner: macos-latest
+      matrix: ${{ fromJson(needs.detect-targets.outputs.matrix) }}
     steps:
       - name: Checkout requested source without persisted Git credentials
         uses: actions/checkout@v4
@@ -160,16 +223,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: android
-            runner: ubuntu-latest
-          - target: windows
-            runner: windows-2025
-          - target: ios
-            runner: macos-latest
-          - target: macos
-            runner: macos-latest
+      matrix: ${{ fromJson(needs.detect-targets.outputs.matrix) }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -186,8 +240,8 @@ jobs:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
           $exe = "release-input/unsigned/windows.exe"
-          if (!(Test-Path $exe)) { Write-Host "No Windows executable was produced; nothing to sign."; exit 0 }
-          if (!$env:WINDOWS_CERT_PFX_BASE64 -or !$env:WINDOWS_CERT_PASSWORD) { Write-Warning "Windows signing secrets are not configured; no Windows artifact will be published as signed."; exit 0 }
+          if (!(Test-Path $exe)) { throw "Windows executable artifact is missing." }
+          if (!$env:WINDOWS_CERT_PFX_BASE64 -or !$env:WINDOWS_CERT_PASSWORD) { throw "Windows signing credentials are required when publish_signed=true." }
           $pfx = Join-Path $env:RUNNER_TEMP "hendy-signing.pfx"
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
           $signTool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
@@ -210,7 +264,7 @@ jobs:
           APK="release-input/unsigned/android.apk"
           AAB="release-input/unsigned/android.aab"
           if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] || [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] || [ -z "${ANDROID_KEY_ALIAS:-}" ] || [ -z "${ANDROID_KEY_PASSWORD:-}" ]; then
-            echo "Android signing secrets are not configured; no Android artifact will be published as signed."; exit 0
+            echo "::error::Android signing credentials are required when publish_signed=true."; exit 1
           fi
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hendy-release.keystore"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1)"
@@ -236,8 +290,8 @@ jobs:
         run: |
           set -euo pipefail
           APP="$(find release-input/unsigned/ios-app -type d -name '*.app' -print -quit 2>/dev/null || true)"
-          if [ -z "$APP" ]; then echo "No iOS .app bundle was produced."; exit 0; fi
-          if [ -z "${IOS_CERTIFICATE_P12_BASE64:-}" ] || [ -z "${IOS_CERTIFICATE_PASSWORD:-}" ] || [ -z "${IOS_PROVISION_PROFILE_BASE64:-}" ]; then echo "iOS signing secrets are missing; no IPA will be published."; exit 0; fi
+          if [ -z "$APP" ]; then echo "::error::iOS .app artifact is missing."; exit 1; fi
+          if [ -z "${IOS_CERTIFICATE_P12_BASE64:-}" ] || [ -z "${IOS_CERTIFICATE_PASSWORD:-}" ] || [ -z "${IOS_PROVISION_PROFILE_BASE64:-}" ]; then echo "::error::iOS signing credentials are required when publish_signed=true."; exit 1; fi
           CERT="$RUNNER_TEMP/hendy-ios-signing.p12"; PROFILE="$RUNNER_TEMP/hendy-profile.mobileprovision"; KEYCHAIN="$RUNNER_TEMP/hendy-signing.keychain-db"; KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
           printf '%s' "$IOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT"
           printf '%s' "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode > "$PROFILE"
@@ -270,8 +324,8 @@ jobs:
           set -euo pipefail
           APP="$(find release-input/unsigned/macos-app -type d -name '*.app' -print -quit 2>/dev/null || true)"
           DMG="release-input/unsigned/macos.dmg"
-          if [ -z "$APP" ] || [ ! -f "$DMG" ]; then echo "No macOS app/DMG was emitted."; exit 0; fi
-          if [ -z "${MACOS_CERTIFICATE_P12_BASE64:-}" ] || [ -z "${MACOS_CERTIFICATE_PASSWORD:-}" ] || [ -z "${MACOS_SIGNING_IDENTITY:-}" ]; then echo "macOS Developer ID secrets missing; no DMG will be published as signed."; exit 0; fi
+          if [ -z "$APP" ] || [ ! -f "$DMG" ]; then echo "::error::macOS app/DMG artifact is missing."; exit 1; fi
+          if [ -z "${MACOS_CERTIFICATE_P12_BASE64:-}" ] || [ -z "${MACOS_CERTIFICATE_PASSWORD:-}" ] || [ -z "${MACOS_SIGNING_IDENTITY:-}" ]; then echo "::error::macOS signing credentials are required when publish_signed=true."; exit 1; fi
           CERT="$RUNNER_TEMP/hendy-macos.p12"; KEYCHAIN="$RUNNER_TEMP/hendy-macos.keychain-db"; PASSWORD="$(openssl rand -hex 16)"
           printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT"
           security create-keychain -p "$PASSWORD" "$KEYCHAIN"; security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
@@ -357,6 +411,7 @@ jobs:
           publish_one windows release-artifacts/signed-build-windows/windows.exe windows.exe application/vnd.microsoft.portable-executable
           publish_one ios release-artifacts/signed-build-ios/ios.ipa ios.ipa application/octet-stream
           publish_one macos release-artifacts/signed-build-macos/macos.dmg macos.dmg application/x-apple-diskimage
+          [[ "$count" -gt 0 ]] || { echo "::error::No signed artifact was available; nothing was published."; exit 1; }
           echo "Published $count verified artifact(s). No unsigned output was made public."
 
   build-status-notify:
