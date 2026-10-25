@@ -9,6 +9,7 @@ type StatusResponse = { success: boolean; statuses?: SecretStatus[]; callbackUrl
 type Values = Record<string, string>;
 
 export const AUTOMATION_FIELDS: Field[] = [
+  { name:"CF_ACCESS_TEAM_DOMAIN", label:"Cloudflare Access team domain", kind:"variable", group:"Security & network", hint:"Tên miền team Cloudflare Access, ví dụ team-name.cloudflareaccess.com." },
   { name:"CF_ACCESS_AUD", label:"Cloudflare Access AUD", kind:"variable", group:"Security & network", hint:"AUD tag bảo vệ Admin/API." },
   { name:"CF_ACCESS_ADMIN_EMAILS", label:"Email quản trị được phép", kind:"variable", group:"Security & network", hint:"Danh sách email phân tách bằng dấu phẩy.", multiline:true },
   { name:"ALLOWED_ORIGINS", label:"CORS allowed origins", kind:"variable", group:"Security & network", hint:"Chỉ dùng origin HTTPS đáng tin cậy; phân tách bằng dấu phẩy.", multiline:true },
@@ -32,7 +33,6 @@ export const AUTOMATION_FIELDS: Field[] = [
   { name:"MACOS_SIGNING_IDENTITY", label:"macOS signing identity", kind:"variable", group:"macOS signing", hint:"Developer ID Application identity." },
   { name:"APPLE_ID", label:"Apple Developer account", kind:"variable", group:"Apple account", hint:"Email dùng cho notarytool khi cần." },
   { name:"APPLE_TEAM_ID", label:"Apple Team ID", kind:"variable", group:"Apple account", hint:"Team ID của Apple Developer Program." },
-  { name:"APPLE_APP_SPECIFIC_PASSWORD", label:"Apple app-specific password", kind:"secret", group:"Apple account", hint:"Chỉ dùng cho luồng notarization đã được bảo vệ." },
   { name:"WINDOWS_CERT_PFX_BASE64", label:"Windows code-signing PFX Base64", kind:"secret", group:"Windows signing", hint:"Tệp .pfx được mã hóa Base64." },
   { name:"WINDOWS_CERT_PASSWORD", label:"Windows PFX password", kind:"secret", group:"Windows signing", hint:"Mật khẩu private-key container." }
 ];
