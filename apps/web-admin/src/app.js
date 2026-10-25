@@ -15,6 +15,7 @@ const state = { files: new Map(), lastReport: null };
 let monacoEditor = null;
 let monacoLoading = false;
 const authProvider = new AuthProvider();
+let aiProposal = null;
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const $ = (selector) => document.querySelector(selector);
 
@@ -23,7 +24,7 @@ function dashboardContent() {
     <div class="workspace-column">
       <div id="source" class="section-anchor">${codePasteZone()}</div>
       <div id="upload" class="section-anchor">${fileUploadZone()}</div>
-      <section id="release" class="panel repair-panel"><div class="panel-heading"><div><p class="eyebrow">03 / SELF-HEALING ENGINE</p><h2>Kiểm tra & sửa cấu hình</h2></div><span class="tag mint">SAFE REPAIR</span></div><p class="panel-hint">Chuẩn hóa JSON, bổ sung ignore an toàn và cảnh báo lockfile/xung đột cấu trúc. Không tự nâng cấp thư viện hoặc chạy mã nguồn được tải lên.</p><div class="button-row"><button id="analyze-btn" class="button secondary">Phân tích mã nguồn</button><button id="repair-btn" class="button primary">Tự sửa cấu hình an toàn</button></div><pre id="diagnostic-output" class="diagnostic-output">Chưa có kết quả phân tích.</pre></section>
+      <section id="release" class="panel repair-panel"><div class="panel-heading"><div><p class="eyebrow">03 / SELF-HEALING ENGINE</p><h2>Kiểm tra & sửa cấu hình</h2></div><span class="tag mint">SAFE REPAIR</span></div><p class="panel-hint">Chuẩn hóa JSON, bổ sung ignore an toàn và cảnh báo lockfile/xung đột cấu trúc. Không tự nâng cấp thư viện hoặc chạy mã nguồn được tải lên.</p><div class="button-row"><button id="analyze-btn" class="button secondary">Phân tích mã nguồn</button><button id="repair-btn" class="button primary">Tự sửa cấu hình an toàn</button><button id="ai-repair-btn" class="button secondary">AI đề xuất bản vá</button></div><label class="check-line ai-confirm-line"><input type="checkbox" id="accept-ai-patch"> Tôi đã xem xét bản vá AI và cho phép áp dụng vào danh sách tệp cục bộ.</label><button id="apply-ai-patch" class="button secondary" type="button" disabled>Áp dụng bản vá đã xem xét</button><pre id="diagnostic-output" class="diagnostic-output">Chưa có kết quả phân tích.</pre></section>
       <section class="panel sync-panel"><div class="panel-heading"><div><p class="eyebrow">04 / GITHUB SYNC</p><h2>Đồng bộ mã nguồn</h2></div><span class="tag">COMMIT + CI</span></div><p class="panel-hint">Gửi tệp đã chọn tới GitHub qua Backend API. Token chỉ nằm ở Worker Secret. Push lên nhánh cấu hình sẽ kích hoạt GitHub Actions matrix build.</p><label class="check-line"><input type="checkbox" id="confirm-sync"> Tôi xác nhận các tệp trong cây là nội dung muốn commit lên GitHub.</label><button id="sync-btn" class="button primary wide" disabled>Đồng bộ lên GitHub & chạy CI</button><div id="sync-output" class="sync-output" aria-live="polite">Chưa thực hiện commit.</div></section>
     <div id="build-monitor-anchor">${buildStatusMonitor()}</div>
       ${storeMetadataForm()}
@@ -195,6 +196,9 @@ function bindFileInputs() {
   $("#clear-files").addEventListener("click", () => { state.files.clear(); $("#source-code").value = ""; if (monacoEditor) monacoEditor.setValue(""); renderTree(); setNotice("#upload-result", "Đã xóa danh sách tệp cục bộ."); });
   $("#analyze-btn").addEventListener("click", () => analyze(false));
   $("#repair-btn").addEventListener("click", () => analyze(true));
+  $("#ai-repair-btn").addEventListener("click", requestAiPatch);
+  $("#accept-ai-patch").addEventListener("change", () => { $("#apply-ai-patch").disabled = !$("#accept-ai-patch").checked || !aiProposal?.patches?.length; });
+  $("#apply-ai-patch").addEventListener("click", applyAiPatch);
   $("#sync-btn").addEventListener("click", syncToGitHub);
   $("#refresh-builds").addEventListener("click", refreshBuilds);
   $("#request-build").addEventListener("click", enqueueBuild);
@@ -223,6 +227,35 @@ async function refreshBuilds() {
   } catch (error) {
     root.innerHTML = `<div class="tree-empty">Không thể đọc trạng thái build: ${esc(error.message)}. Kiểm tra GITHUB_SYNC_TOKEN.</div>`;
   }
+}
+async function requestAiPatch() {
+  const files = renderTree();
+  if (!files.length) return setNotice("#diagnostic-output", "Hãy nạp mã nguồn trước khi gọi AI.", false);
+  const button = $("#ai-repair-btn"); button.disabled = true;
+  setNotice("#diagnostic-output", "AI đang phân tích các chẩn đoán và đề xuất bản vá tối thiểu…");
+  try {
+    const result = await apiRequest("/api/self-heal/llm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, diagnostics: state.lastReport?.diagnostics || [] }) });
+    aiProposal = result;
+    $("#apply-ai-patch").disabled = !$("#accept-ai-patch").checked || !result.patches?.length;
+    $("#diagnostic-output").textContent = JSON.stringify({ summary: result.summary, patches: (result.patches || []).map(p => ({ path: p.path, rationale: p.rationale, newCharacters: p.content.length })), note: "Bản vá chưa được áp dụng. Xem xét từng tệp trước khi xác nhận." }, null, 2);
+    setNotice("#diagnostic-output", `AI đề xuất ${result.patches?.length || 0} bản vá. Bản vá vẫn cần được kiểm tra trước khi áp dụng.`);
+  } catch (error) {
+    aiProposal = null;
+    setNotice("#diagnostic-output", `AI repair không khả dụng: ${error.message}. Kiểm tra secret LLM_API_KEY và giới hạn tệp.`, false);
+  } finally { button.disabled = false; }
+}
+function applyAiPatch() {
+  if (!$("#accept-ai-patch").checked || !aiProposal?.patches?.length) return;
+  for (const patch of aiProposal.patches) {
+    if (state.files.has(patch.path) && typeof patch.content === "string") state.files.set(patch.path, patch.content);
+  }
+  renderTree();
+  $("#source-code").value = "";
+  if (monacoEditor) monacoEditor.setValue("");
+  setNotice("#diagnostic-output", "Đã áp dụng các bản vá được xác nhận vào danh sách cục bộ. Hãy rà soát mã, chạy phân tích/test rồi mới đồng bộ GitHub.");
+  aiProposal = null;
+  $("#apply-ai-patch").disabled = true;
+  $("#accept-ai-patch").checked = false;
 }
 async function enqueueBuild() {
   const button = $("#request-build");
