@@ -289,7 +289,7 @@ function normalizeAutomationValues(values) {
     let value = input;
     if (name === "AUTO_HEAL_ENABLED" && value !== "true" && value !== "false") throw new Error("AUTO_HEAL_ENABLED must be true or false.");
     if (name.endsWith("_BASE64")) {
-      value = value.replace(/\\s+/g, "");
+      value = value.replace(/\s+/g, "");
       if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
         throw new Error(name + " must contain valid Base64.");
       }
