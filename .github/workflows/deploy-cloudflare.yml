@@ -30,6 +30,7 @@ jobs:
       - name: Validate structure, tests and build
         run: |
           npm run validate
+          npm run check:db-schema
           npm test
           npm run build
       - name: Validate required Cloudflare and Access settings
