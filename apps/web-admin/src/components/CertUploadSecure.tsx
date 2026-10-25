@@ -7,7 +7,7 @@ export type CertificateTarget =
   | "MACOS_CERTIFICATE_P12_BASE64"
   | "WINDOWS_CERT_PFX_BASE64";
 export type EncodedCertificate = { targetName: CertificateTarget; filename: string; size: number; sha256: string; base64: string };
-type Props = { onEncoded: (certificate: EncodedCertificate) => void; disabled?: boolean };
+type Props = { onEncoded: (certificate: EncodedCertificate) => void; onClear: (targetName: CertificateTarget) => void; disabled?: boolean };
 const TARGETS: { value: CertificateTarget; label: string; extensions: string[] }[] = [
   { value: "ANDROID_KEYSTORE_BASE64", label: "Android Keystore", extensions: [".jks", ".keystore"] },
   { value: "IOS_CERTIFICATE_P12_BASE64", label: "iOS Distribution Certificate", extensions: [".p12"] },
@@ -31,7 +31,7 @@ async function sha256(buffer: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-export function CertUploadSecure({ onEncoded, disabled = false }: Props) {
+export function CertUploadSecure({ onEncoded, onClear, disabled = false }: Props) {
   const [targetName, setTargetName] = useState<CertificateTarget>("ANDROID_KEYSTORE_BASE64");
   const [file, setFile] = useState<File | null>(null);
   const [certificate, setCertificate] = useState<EncodedCertificate | null>(null);
@@ -61,7 +61,7 @@ export function CertUploadSecure({ onEncoded, disabled = false }: Props) {
     <div className="panel-heading"><div><p className="eyebrow">CERTIFICATE ENCODER</p><h3>Chứng chỉ → Base64</h3></div><span className="tag">IN-MEMORY ONLY</span></div>
     <p className="panel-hint">Base64 chỉ là mã hóa biểu diễn, không phải mã hóa mật mã. Tệp được đọc trong bộ nhớ trình duyệt; giá trị chỉ gửi tới Worker sau khi bấm Đồng bộ và được Worker mã hóa theo public key GitHub trước khi lưu Secret.</p>
     <div className="certificate-fields">
-      <label>Đích lưu GitHub Secret<select value={targetName} disabled={disabled} onChange={(e) => { setTargetName(e.target.value as CertificateTarget); setCertificate(null); setError(""); }}><option value="ANDROID_KEYSTORE_BASE64">ANDROID_KEYSTORE_BASE64 · .jks/.keystore</option><option value="IOS_CERTIFICATE_P12_BASE64">IOS_CERTIFICATE_P12_BASE64 · .p12</option><option value="IOS_PROVISION_PROFILE_BASE64">IOS_PROVISION_PROFILE_BASE64 · .mobileprovision</option><option value="MACOS_CERTIFICATE_P12_BASE64">MACOS_CERTIFICATE_P12_BASE64 · .p12</option><option value="WINDOWS_CERT_PFX_BASE64">WINDOWS_CERT_PFX_BASE64 · .pfx</option></select></label>
+      <label>Đích lưu GitHub Secret<select value={targetName} disabled={disabled} onChange={(e) => { if (certificate) onClear(certificate.targetName); setTargetName(e.target.value as CertificateTarget); setCertificate(null); setFile(null); setError(""); }}><option value="ANDROID_KEYSTORE_BASE64">ANDROID_KEYSTORE_BASE64 · .jks/.keystore</option><option value="IOS_CERTIFICATE_P12_BASE64">IOS_CERTIFICATE_P12_BASE64 · .p12</option><option value="IOS_PROVISION_PROFILE_BASE64">IOS_PROVISION_PROFILE_BASE64 · .mobileprovision</option><option value="MACOS_CERTIFICATE_P12_BASE64">MACOS_CERTIFICATE_P12_BASE64 · .p12</option><option value="WINDOWS_CERT_PFX_BASE64">WINDOWS_CERT_PFX_BASE64 · .pfx</option></select></label>
       <label className="cert-file-input">Chọn tệp chứng chỉ<input type="file" disabled={disabled} accept={target.extensions.join(",")} onChange={(e) => { setFile(e.target.files?.[0] || null); setCertificate(null); setError(""); }} /></label>
     </div>
     <button type="button" className="button secondary" disabled={disabled || !file} onClick={() => void prepare()}>Kiểm tra & tạo Base64</button>
@@ -71,7 +71,7 @@ export function CertUploadSecure({ onEncoded, disabled = false }: Props) {
       <small>SHA-256: <code>{certificate.sha256}</code></small>
       <small>Base64: {certificate.base64.length.toLocaleString()} ký tự · không hiển thị nội dung chứng chỉ</small>
       <button type="button" className="button primary" disabled={disabled} onClick={() => onEncoded(certificate)}>Gắn Base64 vào {certificate.targetName}</button>
-      <button type="button" className="text-button" onClick={() => setCertificate(null)}>Xóa Base64 khỏi bộ nhớ component</button>
+      <button type="button" className="text-button" onClick={() => { onClear(certificate.targetName); setCertificate(null); setFile(null); setError(""); }}>Xóa Base64 khỏi form và bộ nhớ</button>
     </div>}
   </section>;
 }
