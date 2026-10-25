@@ -1,4 +1,4 @@
-import { mkdir, cp, copyFile, rm } from "node:fs/promises";
+import { mkdir, cp, copyFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 
 const output = "dist/pages";
@@ -6,10 +6,33 @@ await rm("dist", { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 const source = "apps/web-user";
 await copyFile(`${source}/index.html`, `${output}/index.html`);
-await copyFile(`${source}/config.js`, `${output}/config.js`);
 await copyFile(`${source}/_headers`, `${output}/_headers`);
 await copyFile(`${source}/_redirects`, `${output}/_redirects`);
 await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
 await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
+
+function normalizedOrigin(value) {
+  const raw = String(value || "").trim().replace(/\\/$/, "");
+  if (!raw) return "";
+  let url;
+  try { url = new URL(raw); } catch { throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be absolute HTTPS URLs."); }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+    throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be clean HTTPS origins.");
+  }
+  return url.origin;
+}
+const apiOrigin = normalizedOrigin(process.env.HENDY_API_BASE_URL);
+const edgeOrigin = normalizedOrigin(process.env.HENDY_EDGE_BASE_URL);
+const config = {
+  apiBaseUrl: apiOrigin ? apiOrigin + "/api" : "/api",
+  adminUrl: edgeOrigin ? edgeOrigin + "/admin" : "/admin"
+};
+await writeFile(`${output}/config.js`, `window.HENDY_CONFIG = Object.freeze(${JSON.stringify(config)});\\n`);
 if (!existsSync(`${output}/web-user/src/app.js`)) throw new Error("Public app entry point was not copied.");
-console.log("Built public Pages bundle at dist/pages. Admin remains in the Access-gated Worker asset bundle.");
+if (!existsSync(`${output}/config.js`)) throw new Error("Runtime API config was not generated.");
+console.log(JSON.stringify({
+  output,
+  apiConfigured: Boolean(apiOrigin),
+  adminConfigured: Boolean(edgeOrigin),
+  note: "For standalone Pages builds set HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL; the production GitHub workflow injects these after provisioning."
+}, null, 2));
