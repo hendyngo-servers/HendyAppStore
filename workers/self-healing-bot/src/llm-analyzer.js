@@ -8,7 +8,7 @@ export function isSafePatchPath(value) {
   const path = String(value || "").replace(/\\/g, "/").replace(/^\.\//, "").trim();
   if (!path || path.startsWith("/") || path.length > 200 || path.split("/").some((p) => !p || p === "." || p === "..")) return false;
   if (DENIED_PATH.test(path) || DENIED_EXTENSION.test(path)) return false;
-  return /^(apps|workers|packages|tests|scripts)\//.test(path) || ["package.json","README.md",".gitignore"].includes(path);
+  return /^(apps|workers|packages|scripts)\//.test(path) && /\.(?:js|mjs|cjs|ts|tsx|jsx|css|html|sql)$/i.test(path);
 }
 export async function proposeSafePatches(inputFiles, diagnostics, env) {
   const key = env.LLM_API_KEY;
