@@ -19,7 +19,7 @@ const required = [
   "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
   "apps/web-admin/src/layouts/FullDevStudioLayout.js",
   "packages/shared-types/src/index.js", "packages/shared-types/src/index.d.ts", "packages/ui-components/src/index.js",
-  "workers/edge-router/src/index.js", "workers/edge-router/wrangler.toml", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
+  "docs/DEPLOY-CLOUDFLARE.md", "workers/edge-router/src/index.js", "workers/edge-router/wrangler.toml", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
   "workers/backend-api/src/github-sync.js", "workers/backend-api/src/db/schema.sql",
   "workers/self-healing-bot/src/index.js", "workers/self-healing-bot/src/llm-analyzer.js",
   "workers/alert-notifier/src/index.js", "scripts/provision-cloudflare-resources.mjs",
