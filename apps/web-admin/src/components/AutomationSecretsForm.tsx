@@ -145,6 +145,6 @@ export function AutomationSecretsForm() {
       </fieldset>)}
       <div className="automation-actions"><button className="button primary" type="submit" disabled={busy}>{busy ? "Đang đồng bộ…" : "Mã hóa & đồng bộ lên GitHub"}</button><button className="button secondary" type="button" disabled={busy} onClick={() => setValues({ ...EMPTY_VALUES })}>Xóa dữ liệu đang nhập</button><span>{lastSync ? `Lần đồng bộ gần nhất: ${lastSync}` : "Không lưu dữ liệu biểu mẫu vào browser storage."}</span></div>
     </form>
-    <CertUploadSecure onEncoded={acceptCertificate} disabled={busy} />
+    <CertUploadSecure onEncoded={acceptCertificate} onClear={(name) => setField(name, "")} disabled={busy} />
   </section>;
 }
