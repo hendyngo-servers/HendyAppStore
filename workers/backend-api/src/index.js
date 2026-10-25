@@ -5,8 +5,28 @@ import { proposeSafePatches } from "../../self-healing-bot/src/llm-analyzer.js";
 import { normalizeAppMetadata } from "../../../packages/shared-types/src/index.js";
 
 const API = "https://api.github.com";
-const MAX_BODY = 10 * 1024 * 1024;
-const allowedExtensions = new Set([".apk", ".ipa", ".exe", ".zip", ".plist", ".msi", ".msix", ".dmg", ".pkg", ".aab"]);
+const MAX_BODY = 12 * 1024 * 1024;
+const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
+const ARTIFACT_EXTENSIONS = Object.freeze({
+  android: new Set([".apk", ".aab"]),
+  ios: new Set([".ipa"]),
+  windows: new Set([".exe", ".msi", ".msix", ".zip"]),
+  macos: new Set([".dmg", ".pkg", ".zip"]),
+  web: new Set([".zip"])
+});
+const ARTIFACT_CONTENT_TYPES = Object.freeze({
+  ".apk": "application/vnd.android.package-archive", ".aab": "application/octet-stream",
+  ".ipa": "application/octet-stream", ".exe": "application/vnd.microsoft.portable-executable",
+  ".msi": "application/x-msi", ".msix": "application/msix", ".zip": "application/zip",
+  ".dmg": "application/x-apple-diskimage", ".pkg": "application/octet-stream"
+});
+export function isAllowedArtifactForPlatform(platform, filename) {
+  const normalizedPlatform = String(platform || "").toLowerCase();
+  const name = String(filename || "").split(/[\\/]/).pop().toLowerCase();
+  const dot = name.lastIndexOf(".");
+  const ext = dot >= 0 ? name.slice(dot) : "";
+  return Boolean(ARTIFACT_EXTENSIONS[normalizedPlatform]?.has(ext));
+}
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...headers } });
 
 function corsHeaders(request, env) {
@@ -28,9 +48,9 @@ function withCors(response, request, env) {
 }
 async function readJson(request) {
   const length = Number(request.headers.get("content-length") || 0);
-  if (length > MAX_BODY) throw new Error("Request body exceeds 10 MiB.");
+  if (length > MAX_BODY) throw new Error("Request body exceeds 12 MiB.");
   const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > MAX_BODY) throw new Error("Request body exceeds 10 MiB.");
+  if (new TextEncoder().encode(text).byteLength > MAX_BODY) throw new Error("Request body exceeds 12 MiB.");
   try { return JSON.parse(text || "{}"); } catch { throw new Error("Body must be valid JSON."); }
 }
 async function requireAdmin(request, env) {
@@ -130,22 +150,21 @@ async function iosManifest(url, env, request) {
 }
 async function uploadRelease(body, env, auth) {
   if (!env.RELEASES_BUCKET) return json({ success: false, error: "release_storage_unavailable" }, 503);
-  const filename = String(body.filename || "").split(/[\\/]/).pop();
-  const ext = "." + (filename.split(".").pop() || "").toLowerCase();
-  if (!allowedExtensions.has(ext)) return json({ success: false, error: "unsupported_artifact_extension" }, 400);
+  const filename = String(body.filename || "").split(/[\\/]/).pop().replace(/[\\r\\n"]/g, "_");
   const platform = String(body.platform || "").toLowerCase();
-  if (!["android","ios","windows","macos","web"].includes(platform)) return json({ success: false, error: "unsupported_platform" }, 400);
+  if (!ARTIFACT_EXTENSIONS[platform]) return json({ success: false, error: "unsupported_platform" }, 400);
+  if (!isAllowedArtifactForPlatform(platform, filename)) return json({ success: false, error: "artifact_extension_does_not_match_platform" }, 400);
   const base64 = String(body.contentBase64 || "");
-  if (!base64 || base64.length > 8 * 1024 * 1024 * 4 / 3) return json({ success: false, error: "artifact_too_large_or_empty" }, 413);
+  if (!base64 || base64.length > Math.ceil(MAX_ARTIFACT_BYTES * 4 / 3) + 8) return json({ success: false, error: "artifact_too_large_or_empty" }, 413);
   let bytes;
   try { const raw = atob(base64.replace(/\s/g, "")); bytes = Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
   catch { return json({ success: false, error: "invalid_base64" }, 400); }
-  if (bytes.byteLength > 8 * 1024 * 1024) return json({ success: false, error: "artifact_limit_8_mib_use_r2_cli_for_large_files" }, 413);
+  if (bytes.byteLength > MAX_ARTIFACT_BYTES) return json({ success: false, error: "artifact_limit_8_mib_use_matrix_build_or_r2_cli_for_large_files" }, 413);
   const id = crypto.randomUUID();
   const objectKey = `artifacts/${platform}/${id}/${filename.replace(/[^A-Za-z0-9._-]/g, "_")}`;
   const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   const sha256 = [...hash].map((b) => b.toString(16).padStart(2,"0")).join("");
-  await env.RELEASES_BUCKET.put(objectKey, bytes, { httpMetadata: { contentType: body.contentType || "application/octet-stream" }, customMetadata: { sha256, platform, version: String(body.version || "0.0.0") } });
+  await env.RELEASES_BUCKET.put(objectKey, bytes, { httpMetadata: { contentType: ARTIFACT_CONTENT_TYPES["." + filename.split(".").pop().toLowerCase()] || "application/octet-stream" }, customMetadata: { sha256, platform, version: String(body.version || "0.0.0") } });
   const metadata = {
     id, appName: String(body.appName || "Hendy App").slice(0, 120), description: String(body.description || "").slice(0, 500),
     filename, version: String(body.version || "0.0.0").slice(0, 64), platform, objectKey, sha256,
@@ -193,8 +212,12 @@ async function getBuildStatus(env) {
   }
   if (env.DB) {
     const result = await env.DB.prepare("SELECT id, run_id AS runId, workflow, platform, status, commit_sha AS commitSha, created_at AS createdAt, started_at AS startedAt, completed_at AS completedAt, html_url AS htmlUrl, error_message AS errorMessage FROM build_history ORDER BY created_at DESC LIMIT 25").all();
-    const seen = new Set(builds.map((item) => String(item.id)));
-    for (const item of result.results || []) if (!seen.has(String(item.id))) builds.push(item);
+    const seen = new Set(builds.flatMap((item) => [item.id, item.runId].filter((value) => value !== undefined && value !== null && value !== "").map(String)));
+    for (const item of result.results || []) {
+      const identifiers = [item.id, item.runId].filter((value) => value !== undefined && value !== null && value !== "").map(String);
+      if (!identifiers.some((value) => seen.has(value))) builds.push(item);
+      identifiers.forEach((value) => seen.add(value));
+    }
   }
   builds.sort((a,b) => String(b.createdAt || b.startedAt || "").localeCompare(String(a.createdAt || a.startedAt || "")));
   return builds.slice(0, 25);
@@ -214,6 +237,23 @@ async function listPublicApps(env) {
   if (!env.DB) return json({ success: true, apps: [], storageReady: false });
   const result = await env.DB.prepare("SELECT id, slug, name, description, category, icon_url AS iconUrl, visibility, created_at AS createdAt, updated_at AS updatedAt FROM apps WHERE visibility='public' ORDER BY updated_at DESC LIMIT 500").all();
   return json({ success: true, apps: result.results || [], storageReady: true });
+}
+async function listAdminReleases(env) {
+  if (!env.RELEASES_BUCKET) return json({ success: true, releases: [], storageReady: false });
+  const releases = [];
+  let cursor;
+  let pages = 0;
+  do {
+    const page = await env.RELEASES_BUCKET.list({ prefix: "catalog/", limit: 500, cursor });
+    for (const object of page.objects || []) {
+      const metadata = await readCatalogObject(env.RELEASES_BUCKET, object.key);
+      if (metadata && metadata.id) releases.push(metadata);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+    pages++;
+  } while (cursor && pages < 5);
+  releases.sort((a,b) => String(b.uploadedAt || b.publishedAt || "").localeCompare(String(a.uploadedAt || a.publishedAt || "")));
+  return json({ success: true, releases: releases.slice(0, 100), storageReady: true, truncated: !!cursor });
 }
 async function listApps(env) {
   if (!env.DB) return json({ success: false, error: "d1_not_configured", apps: [] }, 503);
@@ -475,6 +515,7 @@ async function handle(request, env) {
     if (!auth.ok) return auth;
     if (request.method === "GET" && path === "/api/admin/status") return json({ success: true, authenticated: true, email: auth.email });
     if (request.method === "GET" && path === "/api/admin/builds") return json({ success: true, builds: await getBuildStatus(env) });
+    if (request.method === "GET" && path === "/api/admin/releases") return listAdminReleases(env);
     if (request.method === "GET" && path === "/api/admin/apps") return listApps(env);
     if (request.method === "POST" && path === "/api/admin/apps") {
       const body = await readJson(request);
@@ -510,7 +551,10 @@ async function handle(request, env) {
         return json({ success: true, ...result, ciTriggeredByPush: true }, 201);
       } catch (error) { return json({ success: false, error: error.message, code: error.status || 0 }, error.status === 409 ? 409 : 400); }
     }
-    if (request.method === "POST" && path === "/api/releases/upload") return uploadRelease(await readJson(request), env, auth);
+    if (request.method === "POST" && path === "/api/releases/upload") {
+      try { return await uploadRelease(await readJson(request), env, auth); }
+      catch (error) { return json({ success: false, error: String(error?.message || "Artifact upload failed.").slice(0, 500) }, 400); }
+    }
     if (request.method === "POST" && path === "/api/build/queue") {
       try { return json({ success: true, build: await enqueueBuild(await readJson(request), auth, env) }, 202); }
       catch (error) { return json({ success: false, error: error.message }, 503); }
