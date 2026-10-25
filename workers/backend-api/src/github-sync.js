@@ -1,6 +1,6 @@
 const API = "https://api.github.com";
 const SECRETISH = /(^|\/)(\.env(?:\..*)?|id_rsa|id_ed25519|credentials(?:\.json)?|secrets?\.json|.*\.(?:pem|key|p12|pfx|keystore|jks|mobileprovision))$/i;
-const ALLOWED_ROOTS = ["apps/", "workers/", "scripts/", "tests/"];
+const ALLOWED_ROOTS = ["apps/", "workers/", "packages/", "scripts/", "tests/"];
 const ALLOWED_ROOT_FILES = new Set(["README.md", "package.json", "wrangler.toml", ".gitignore"]);
 
 export function validateSyncPath(raw) {
