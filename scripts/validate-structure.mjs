@@ -19,7 +19,7 @@ const required = [
   "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
   "apps/web-admin/src/layouts/FullDevStudioLayout.js",
   "packages/shared-types/src/index.js", "packages/shared-types/src/index.d.ts", "packages/ui-components/src/index.js",
-  "workers/edge-router/src/index.js", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
+  "workers/edge-router/src/index.js", "workers/edge-router/wrangler.toml", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
   "workers/backend-api/src/github-sync.js", "workers/backend-api/src/db/schema.sql",
   "workers/self-healing-bot/src/index.js", "workers/self-healing-bot/src/llm-analyzer.js",
   "workers/alert-notifier/src/index.js", "scripts/provision-cloudflare-resources.mjs",
@@ -36,11 +36,17 @@ for (const path of [".github/workflows/deploy-render.yml", "server.ts", "src/App
   assert.equal(existsSync(path), false, `Legacy source should not exist after rewrite: ${path}`);
 }
 const root = readFileSync("wrangler.toml", "utf8");
+assert.match(root, /name = "hendyappstore"/, "Root config must match the Cloudflare Workers Builds worker name.");
 assert.match(root, /STATIC_ASSETS/);
-assert.match(root, /BACKEND_API/);
+assert.doesNotMatch(root, /^service\s*=\s*"hendy-app-store-api"\s*$/m,
+  "Root Workers Builds config must not depend on the API Worker being provisioned first.");
 assert.match(root, /not_found_handling = "none"/, "Worker assets must leave unmatched route handling to the router.");
 assert.ok(root.includes('run_worker_first = ["/api*", "/admin*", "/web-admin/*"]'),
   "Admin/API paths must run through the Worker before matching static files are served.");
+const productionEdge = readFileSync("workers/edge-router/wrangler.toml", "utf8");
+assert.match(productionEdge, /name = "hendy-app-store-edge"/);
+assert.match(productionEdge, /service = "hendy-app-store-api"/, "Integrated router must bind the API Worker after API deployment.");
+assert.match(productionEdge, /directory = "\.\.\/\.\.\/apps"/, "Production router must upload the app assets.");
 const deployWorkflow = readFileSync(".github/workflows/deploy-cloudflare.yml", "utf8");
 assert.match(deployWorkflow, /Verify Cloudflare API token/);
 assert.match(deployWorkflow, /--dry-run/, "Cloudflare Worker bundles should be validated before remote deployment.");
