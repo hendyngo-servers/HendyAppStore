@@ -113,7 +113,10 @@ export function AutomationSecretsForm() {
       setDeploymentUrl(data.deployment?.actionsUrl || "");
       setValues({ ...EMPTY_VALUES });
       setCertificateResetKey((key) => key + 1);
-      setMessage(`Đồng bộ xong: ${(data.updated || []).length} mục cập nhật; ${(data.skipped || []).length} mục trống được giữ nguyên. Giá trị secrets không được trả về trình duyệt.`);
+      const syncSummary = `Đồng bộ xong: ${(data.updated || []).length} mục cập nhật; ${(data.skipped || []).length} mục trống được giữ nguyên. Giá trị secrets không được trả về trình duyệt.`;
+      if (data.deployment?.triggered) setMessage(syncSummary + " GitHub đã nhận yêu cầu deploy Cloudflare; mở liên kết bên dưới để theo dõi kết quả.");
+      else if (data.deployment?.requested && data.deployment.error) setMessage(syncSummary + " Đồng bộ đã hoàn tất nhưng không gửi được yêu cầu deploy: " + data.deployment.error);
+      else setMessage(syncSummary);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không đồng bộ được cấu hình.");
       setMessage("Không có giá trị nào được hiển thị trong log của giao diện. Kiểm tra quyền Actions của token và cấu hình Cloudflare Access.");
