@@ -1,22 +1,7 @@
 name: Deploy Hendy App Store to Cloudflare Workers and Pages
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/**"
-      - "workers/**"
-      - "packages/**"
-      - "android/**"
-      - "windows/**"
-      - "ios/**"
-      - "macos/**"
-      - "scripts/**"
-      - "automation/**"
-      - "tests/**"
-      - "package.json"
-      - "wrangler.toml"
-      - ".github/workflows/**"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
