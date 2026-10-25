@@ -12,7 +12,8 @@ await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
 await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
 
 function normalizedOrigin(value) {
-  const raw = String(value || "").trim().replace(/\/$/, "");
+  const rawValue = String(value || "").trim();
+  const raw = rawValue.endsWith("/") ? rawValue.slice(0, -1) : rawValue;
   if (!raw) return "";
   let url;
   try { url = new URL(raw); } catch { throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be absolute HTTPS URLs."); }
