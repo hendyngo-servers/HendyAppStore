@@ -1,4 +1,4 @@
-import { escapeHtml } from "../../../../packages/ui-components/src/index.js";
+import { escapeHtml } from "../shared/ui.js";
 export function renderMacOsDmgDownloader(release) {
   if (!release?.downloadUrl) return '<span class="disabled-note">Chưa có DMG</span>';
   const ext = String(release.filename || "").split(".").pop().toLowerCase();

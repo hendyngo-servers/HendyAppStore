@@ -1,4 +1,4 @@
-import { escapeHtml } from "../../../../packages/ui-components/src/index.js";
+import { escapeHtml } from "../shared/ui.js";
 export function renderWindowsSafeInstaller(release) {
   if (!release?.downloadUrl) return '<span class="disabled-note">Chưa có trình cài đặt Windows</span>';
   const ext = String(release.filename || "").split(".").pop().toLowerCase();

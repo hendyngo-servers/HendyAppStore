@@ -1,4 +1,4 @@
-import { escapeHtml } from "../../../../packages/ui-components/src/index.js";
+import { escapeHtml } from "../shared/ui.js";
 export function renderIOSOtaDownloader(release, apiBase = "/api") {
   if (!release?.downloadUrl) return '<span class="disabled-note">Chưa có IPA</span>';
   const manifest = release.manifestUrl || `${apiBase}/releases/ios-manifest?id=${encodeURIComponent(release.id || "")}`;

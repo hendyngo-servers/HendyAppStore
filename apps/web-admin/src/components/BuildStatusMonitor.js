@@ -1,4 +1,4 @@
-import { escapeHtml } from "../../../../packages/ui-components/src/index.js";
+import { escapeHtml } from "../shared/ui.js";
 const statusTone = (status) => ({success:"success",failed:"danger",failure:"danger",running:"info",in_progress:"info",queued:"warning",cancelled:"neutral",skipped:"neutral"})[String(status || "").toLowerCase()] || "neutral";
 export function buildStatusMonitor() {
   return `<section id="build-monitor" class="panel build-monitor"><div class="panel-heading"><div><p class="eyebrow">05 / MATRIX BUILD ENGINE</p><h2>Trạng thái Build</h2></div><div class="build-actions"><button id="request-build" class="button primary" type="button">Yêu cầu Build</button><button id="refresh-builds" class="button secondary" type="button">Làm mới</button></div></div><p class="panel-hint">Theo dõi GitHub Actions build trên Linux, Windows, macOS. Nút Build gửi lệnh qua Cloudflare Queues.</p><div id="build-request-output" class="sync-output" aria-live="polite"></div><div id="build-status-list" class="build-status-list"><div class="tree-empty">Đang tải build gần nhất…</div></div></section>`;
