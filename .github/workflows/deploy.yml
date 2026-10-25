@@ -1,4 +1,4 @@
-name: Hendy App Store — Deploy
+name: Deploy Hendy App Store to Cloudflare Workers and Pages
 
 on:
   push:
@@ -30,5 +30,196 @@ concurrency:
 
 jobs:
   deploy:
-    uses: ./.github/workflows/deploy-cloudflare.yml
-    secrets: inherit
+    name: Provision and deploy Cloudflare resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: cloudflare-production
+    steps:
+      - name: Checkout source without persisted Git credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install root dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate structure, tests and build
+        run: |
+          npm run validate
+          npm run check:db-schema
+          npm test
+          npm run build
+      - name: Validate required Cloudflare and Access settings
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN || secrets.CF_ACCESS_TEAM_DOMAIN }}
+          CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD || secrets.CF_ACCESS_AUD }}
+          CF_ACCESS_ADMIN_EMAILS: ${{ vars.CF_ACCESS_ADMIN_EMAILS || secrets.CF_ACCESS_ADMIN_EMAILS }}
+          SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
+          AUTO_HEAL_ENABLED: ${{ vars.AUTO_HEAL_ENABLED || secrets.AUTO_HEAL_ENABLED || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::Add repository/environment secret CLOUDFLARE_API_TOKEN"; exit 1; }
+          [[ "${CLOUDFLARE_ACCOUNT_ID:-}" =~ ^[a-fA-F0-9]{32}$ ]] || { echo "::error::CLOUDFLARE_ACCOUNT_ID must be 32 hex characters"; exit 1; }
+          access_count=0
+          for value in "${CF_ACCESS_TEAM_DOMAIN:-}" "${CF_ACCESS_AUD:-}" "${CF_ACCESS_ADMIN_EMAILS:-}"; do
+            if [ -n "$value" ]; then access_count=$((access_count + 1)); fi
+          done
+          if [ "$access_count" -ne 0 ] && [ "$access_count" -ne 3 ]; then
+            echo "::error::For Admin access configure all three: CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD, CF_ACCESS_ADMIN_EMAILS. Leave all three empty to deploy Public Store with Admin locked."
+            exit 1
+          fi
+          if [ "$access_count" -eq 0 ]; then
+            echo "::warning::Cloudflare Access settings are not configured. Public Store can deploy; Admin endpoints will remain fail-closed (503)."
+          fi
+          if [ "${AUTO_HEAL_ENABLED:-false}" = "true" ] && [ -z "${SELF_HEAL_WEBHOOK_SECRET:-}" ]; then echo "::error::SELF_HEAL_WEBHOOK_SECRET is required when AUTO_HEAL_ENABLED=true"; exit 1; fi
+      - name: Verify Cloudflare API token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          const response = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
+            headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` }
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data.success !== true || data.result?.status !== "active") {
+            throw new Error("Cloudflare API token is invalid, inactive, or cannot be verified. Check CLOUDFLARE_API_TOKEN.");
+          }
+          console.log("Cloudflare API token is active.");
+          NODE
+      - name: Provision R2, Pages, D1, KV, Queues and Workers hostname
+        id: provision
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'hendy-app-store' }}
+        run: node scripts/provision-cloudflare-resources.mjs
+      - name: Sync derived build callback URL to GitHub Actions Variables
+        env:
+          GITHUB_SYNC_TOKEN: ${{ secrets.GITHUB_SYNC_TOKEN }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          BUILD_STATUS_WEBHOOK_URL: ${{ steps.provision.outputs.alerts_base }}/webhooks/github/build-status
+        run: node scripts/sync-github-variable.mjs
+        continue-on-error: true
+      - name: Render runtime D1/KV bindings into Wrangler configs
+        env:
+          D1_DATABASE_ID: ${{ steps.provision.outputs.d1_id }}
+          KV_NAMESPACE_ID: ${{ steps.provision.outputs.kv_id }}
+          HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || steps.provision.outputs.pages_base }}
+        run: node scripts/render-cloudflare-config.mjs
+      - name: Validate Wrangler bundles before remote deploy
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --dry-run --config workers/backend-api/wrangler.toml
+          npx wrangler deploy --dry-run --config workers/alert-notifier/wrangler.toml
+          npx wrangler deploy --dry-run --config wrangler.toml
+          npx wrangler deploy --dry-run --config workers/edge-router/wrangler.toml
+      - name: Apply D1 schema
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 execute hendy-app-store-db --remote --config workers/backend-api/wrangler.toml --file workers/backend-api/src/db/schema.sql
+      - name: Deploy Backend API Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config workers/backend-api/wrangler.toml
+      - name: Set Backend API runtime secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN || secrets.CF_ACCESS_TEAM_DOMAIN }}
+          CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD || secrets.CF_ACCESS_AUD }}
+          CF_ACCESS_ADMIN_EMAILS: ${{ vars.CF_ACCESS_ADMIN_EMAILS || secrets.CF_ACCESS_ADMIN_EMAILS }}
+          GITHUB_SYNC_TOKEN: ${{ secrets.GITHUB_SYNC_TOKEN }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          AUTO_HEAL_ENABLED: ${{ vars.AUTO_HEAL_ENABLED || secrets.AUTO_HEAL_ENABLED || 'false' }}
+          SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${CF_ACCESS_TEAM_DOMAIN:-}" ] && [ -n "${CF_ACCESS_AUD:-}" ] && [ -n "${CF_ACCESS_ADMIN_EMAILS:-}" ]; then
+            printf '%s' "$CF_ACCESS_TEAM_DOMAIN" | npx wrangler secret put CF_ACCESS_TEAM_DOMAIN --config workers/backend-api/wrangler.toml
+            printf '%s' "$CF_ACCESS_AUD" | npx wrangler secret put CF_ACCESS_AUD --config workers/backend-api/wrangler.toml
+            printf '%s' "$CF_ACCESS_ADMIN_EMAILS" | npx wrangler secret put CF_ACCESS_ADMIN_EMAILS --config workers/backend-api/wrangler.toml
+          else
+            echo "::warning::Admin access settings omitted. Backend admin API remains fail-closed until all three Access values are supplied."
+          fi
+          printf '%s' "$AUTO_HEAL_ENABLED" | npx wrangler secret put AUTO_HEAL_ENABLED --config workers/backend-api/wrangler.toml
+          if [ -n "${SELF_HEAL_WEBHOOK_SECRET:-}" ]; then printf '%s' "$SELF_HEAL_WEBHOOK_SECRET" | npx wrangler secret put SELF_HEAL_WEBHOOK_SECRET --config workers/backend-api/wrangler.toml; fi
+          if [ -n "${GITHUB_SYNC_TOKEN:-}" ]; then printf '%s' "$GITHUB_SYNC_TOKEN" | npx wrangler secret put GITHUB_SYNC_TOKEN --config workers/backend-api/wrangler.toml; else echo "::warning::GITHUB_SYNC_TOKEN missing; source sync and GitHub build dispatch won't work."; fi
+          if [ -n "${LLM_API_KEY:-}" ]; then printf '%s' "$LLM_API_KEY" | npx wrangler secret put LLM_API_KEY --config workers/backend-api/wrangler.toml; else echo "::warning::LLM_API_KEY missing; AI patch proposals remain disabled."; fi
+      - name: Deploy Alert Notifier Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config workers/alert-notifier/wrangler.toml
+      - name: Set Alert Notifier runtime secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BUILD_STATUS_WEBHOOK_SECRET: ${{ secrets.BUILD_STATUS_WEBHOOK_SECRET }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
+          AUTO_HEAL_ENABLED: ${{ vars.AUTO_HEAL_ENABLED || secrets.AUTO_HEAL_ENABLED || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${BUILD_STATUS_WEBHOOK_SECRET:-}" ]; then printf '%s' "$BUILD_STATUS_WEBHOOK_SECRET" | npx wrangler secret put BUILD_STATUS_WEBHOOK_SECRET --config workers/alert-notifier/wrangler.toml; else echo "::warning::BUILD_STATUS_WEBHOOK_SECRET missing; authenticated workflow callbacks are disabled."; fi
+          if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then printf '%s' "$DISCORD_WEBHOOK_URL" | npx wrangler secret put DISCORD_WEBHOOK_URL --config workers/alert-notifier/wrangler.toml; fi
+          if [ -n "${SELF_HEAL_WEBHOOK_SECRET:-}" ]; then printf '%s' "$SELF_HEAL_WEBHOOK_SECRET" | npx wrangler secret put SELF_HEAL_WEBHOOK_SECRET --config workers/alert-notifier/wrangler.toml; fi
+          printf '%s' "$AUTO_HEAL_ENABLED" | npx wrangler secret put AUTO_HEAL_ENABLED --config workers/alert-notifier/wrangler.toml
+      - name: Deploy Edge Router Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config workers/edge-router/wrangler.toml
+      - name: Prepare separate public Pages output
+        id: pages
+        env:
+          HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
+          HENDY_EDGE_BASE_URL: ${{ steps.provision.outputs.edge_base }}
+        run: node scripts/prepare-pages.mjs
+      - name: Configure Pages Functions backend origin
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ steps.provision.outputs.pages_project_name }}
+          HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
+        run: printf '%s' "$HENDY_API_BASE_URL" | npx wrangler pages secret put HENDY_API_BASE_URL --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME"
+      - name: Deploy Public Store to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ steps.provision.outputs.pages_project_name }}
+        run: npx wrangler pages deploy dist/pages --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME" --branch main
+      - name: Smoke test API, Edge Router and Pages
+        env:
+          HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
+          HENDY_EDGE_BASE: ${{ steps.provision.outputs.edge_base }}
+          PAGES_BASE_URL: ${{ steps.provision.outputs.pages_base }}
+        run: node scripts/smoke-test.mjs
+      - name: Deployment summary
+        if: always()
+        env:
+          API_BASE: ${{ steps.provision.outputs.api_base }}
+          EDGE_BASE: ${{ steps.provision.outputs.edge_base }}
+          ALERTS_BASE: ${{ steps.provision.outputs.alerts_base }}
+          PAGES_BASE: ${{ steps.provision.outputs.pages_base }}
+        run: |
+          {
+            echo "### Hendy App Store Cloudflare deployment"
+            echo
+            echo "- Public Store: ${PAGES_BASE:-not deployed}"
+            echo "- Edge Router / Admin entry: ${EDGE_BASE:-not deployed}/admin"
+            echo "- Backend API: ${API_BASE:-not deployed}"
+            echo "- Alert Notifier: ${ALERTS_BASE:-not deployed}/webhooks/github/build-status"
+            echo "- R2, D1, KV and Queue: hendy-app-store resources"
+            echo "- Access policy: verify Cloudflare Zero Trust protects /admin*, /web-admin/* and /api/* before sharing Admin URL."
+            echo "- Store publishing requires signed artifacts and protected developer-account credentials."
+          } >> "$GITHUB_STEP_SUMMARY"
