@@ -255,11 +255,11 @@ async function dispatchBuildToGitHub(message, env) {
   return result;
 }
 function isAutoHealSourcePath(path) {
-  const value = String(path || "").replace(/\\\\/g, "/");
-  return /^(apps|workers|packages|scripts)\//.test(value)
-    && /\\.(?:js|mjs|cjs|ts|tsx|jsx|css|html|sql)$/i.test(value)
-    && !/(^|\\/)\\.github(\\/|$)/i.test(value)
-    && !/(^|\\/)(node_modules|dist|coverage)(\\/|$)/i.test(value);
+  const value = String(path || "").replace(/\\/g, "/");
+  const allowedRoot = ["apps/", "workers/", "packages/", "scripts/"].some((root) => value.startsWith(root));
+  const sourceExtension = [".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".css", ".html", ".sql"].some((ext) => value.toLowerCase().endsWith(ext));
+  const forbiddenSegment = value.split("/").some((segment) => [".github", "node_modules", "dist", "coverage"].includes(segment.toLowerCase()));
+  return allowedRoot && sourceExtension && !forbiddenSegment;
 }
 function decodeGithubBase64(value) {
   const encoded = String(value || "").replace(/\\s+/g, "");
