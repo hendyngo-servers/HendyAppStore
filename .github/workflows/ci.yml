@@ -33,6 +33,14 @@ jobs:
         run: npm test
       - name: Build public Pages bundle
         run: npm run build
+      - name: Test Pages production runtime-config generation
+        env:
+          HENDY_API_BASE_URL: https://api-smoke-test.workers.dev
+          HENDY_EDGE_BASE_URL: https://edge-smoke-test.workers.dev
+        run: |
+          node scripts/prepare-pages.mjs
+          grep -F 'https://api-smoke-test.workers.dev/api' dist/pages/config.js
+          grep -F 'https://edge-smoke-test.workers.dev/admin' dist/pages/config.js
       - name: Render placeholder resource IDs for offline Wrangler validation
         env:
           D1_DATABASE_ID: "00000000-0000-0000-0000-000000000001"
