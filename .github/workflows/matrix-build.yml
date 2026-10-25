@@ -160,14 +160,18 @@ jobs:
           gradle-version: "8.10.2"
       - name: Build Android APK and AAB (unsigned)
         if: matrix.target == 'android'
+        env:
+          ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME || 'com.hendy.appstore' }}
         shell: bash
         run: |
           set -euo pipefail
           gradle -p android assembleRelease bundleRelease
           APK="$(find android/app/build/outputs/apk/release -type f -name '*.apk' -print -quit 2>/dev/null || true)"
           AAB="$(find android/app/build/outputs/bundle/release -type f -name '*.aab' -print -quit 2>/dev/null || true)"
-          if [ -n "$APK" ]; then cp "$APK" matrix-output/unsigned/android.apk; else echo "Android build did not emit APK." > matrix-output/android-build.txt; fi
-          if [ -n "$AAB" ]; then cp "$AAB" matrix-output/unsigned/android.aab; else echo "Android build did not emit AAB." >> matrix-output/android-build.txt; fi
+          test -n "$APK" || { echo "::error::Android APK output was not produced."; exit 1; }
+          test -n "$AAB" || { echo "::error::Android AAB output was not produced."; exit 1; }
+          cp "$APK" matrix-output/unsigned/android.apk
+          cp "$AAB" matrix-output/unsigned/android.aab
       - name: Setup .NET for Windows
         if: matrix.target == 'windows'
         uses: actions/setup-dotnet@v4
@@ -185,12 +189,14 @@ jobs:
           Copy-Item $exe.FullName matrix-output/unsigned/windows.exe
       - name: Build iOS app bundle (unsigned)
         if: matrix.target == 'ios'
+        env:
+          IOS_APP_IDENTIFIER: ${{ vars.IOS_APP_IDENTIFIER || 'com.hendy.appstore.ios' }}
         shell: bash
         run: |
           set -euo pipefail
-          xcodebuild -project ios/HendyAppStore.xcodeproj -scheme HendyAppStore -configuration Release -sdk iphoneos -derivedDataPath matrix-output/ios-derived CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project ios/HendyAppStore.xcodeproj -scheme HendyAppStore -configuration Release -sdk iphoneos -derivedDataPath matrix-output/ios-derived PRODUCT_BUNDLE_IDENTIFIER="$IOS_APP_IDENTIFIER" CODE_SIGNING_ALLOWED=NO build
           APP="$(find matrix-output/ios-derived/Build/Products -type d -name '*.app' -path '*Release-iphoneos*' -print -quit 2>/dev/null || true)"
-          if [ -z "$APP" ]; then echo "Xcode did not emit an iOS .app bundle." > matrix-output/ios-build.txt; exit 0; fi
+          if [ -z "$APP" ]; then echo "::error::Xcode did not emit an iOS .app bundle."; exit 1; fi
           mkdir -p matrix-output/unsigned/ios-app
           ditto "$APP" "matrix-output/unsigned/ios-app/$(basename "$APP")"
       - name: Build macOS app bundle and DMG (unsigned)
@@ -200,7 +206,7 @@ jobs:
           set -euo pipefail
           xcodebuild -project macos/HendyAppStoreMac.xcodeproj -scheme HendyAppStoreMac -configuration Release -sdk macosx -derivedDataPath matrix-output/macos-derived CODE_SIGNING_ALLOWED=NO build
           APP="$(find matrix-output/macos-derived/Build/Products -type d -name '*.app' -path '*Release*' -print -quit 2>/dev/null || true)"
-          if [ -z "$APP" ]; then echo "Xcode did not emit a macOS .app bundle." > matrix-output/macos-build.txt; exit 0; fi
+          if [ -z "$APP" ]; then echo "::error::Xcode did not emit a macOS .app bundle."; exit 1; fi
           mkdir -p matrix-output/unsigned/macos-app
           ditto "$APP" "matrix-output/unsigned/macos-app/$(basename "$APP")"
           hdiutil create -volname "Hendy App Store" -srcfolder "$APP" -ov -format UDZO matrix-output/unsigned/macos.dmg
