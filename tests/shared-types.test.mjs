@@ -15,3 +15,9 @@ test("normalizes accented slugs and validates enumerations", () => {
   assert.equal(isPlatform("playstation"), false);
   assert.equal(isBuildStatus("failed"), true);
 });
+
+test("requires secure HTTPS for app icon URLs", () => {
+  assert.throws(() => normalizeAppMetadata({ name: "Unsafe", iconUrl: "javascript:alert(1)" }), /HTTPS/);
+  assert.throws(() => normalizeAppMetadata({ name: "Unsafe", iconUrl: "http://example.test/icon.png" }), /HTTPS/);
+  assert.equal(normalizeAppMetadata({ name: "Secure", iconUrl: "https://example.test/icon.png" }).iconUrl, "https://example.test/icon.png");
+});

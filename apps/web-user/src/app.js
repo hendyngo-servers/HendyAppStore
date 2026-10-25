@@ -2,6 +2,7 @@ import { detectDevice } from "./hooks/useDeviceDetect.js";
 import { renderMobileLayout } from "./layouts/MobileAppStoreLayout.js";
 import { renderDesktopLayout } from "./layouts/DesktopPortalLayout.js";
 import { renderPlatformDownloadActions } from "./components/PlatformDownloadActions.js";
+import { safeHref } from "./shared/ui.js";
 
 const API_BASE = (globalThis.HENDY_CONFIG?.apiBaseUrl || "/api").replace(/\/$/, "");
 const $ = (selector) => document.querySelector(selector);
@@ -19,7 +20,7 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function normalizeRelease(r) {
-  return { id: String(r.id || r.key || ""), name: String(r.appName || r.name || r.product || "Hendy App"), description: String(r.description || r.notes || "Bản phát hành được quản lý"), version: String(r.version || "—"), platform: String(r.platform || "Multi-platform"), updatedAt: r.publishedAt || r.createdAt || r.updatedAt || "", downloadUrl: r.downloadUrl || r.url || "", filename: String(r.filename || ""), manifestUrl: r.manifestUrl || "", sha256: r.sha256 || r.checksum || "" };
+  return { id: String(r.id || r.key || ""), name: String(r.appName || r.name || r.product || "Hendy App"), description: String(r.description || r.notes || "Bản phát hành được quản lý"), version: String(r.version || "—"), platform: String(r.platform || "Multi-platform"), updatedAt: r.publishedAt || r.createdAt || r.updatedAt || "", downloadUrl: r.downloadUrl || r.url || "", filename: String(r.filename || ""), manifestUrl: r.manifestUrl || "", sha256: r.sha256 || r.checksum || "", iconUrl: String(r.iconUrl || ""), screenshots: Array.isArray(r.screenshots) ? r.screenshots.slice(0, 8) : [] };
 }
 function showStatus(text, ok = true) {
   const el = $("#api-status"); el.textContent = text; el.classList.toggle("error", !ok);
@@ -35,7 +36,16 @@ function renderCatalog(list = releases) {
   }));
 }
 function showRelease(item) {
-  $("#release-list").innerHTML = `<article class="release-card"><div><span class="release-platform">${escapeHtml(item.platform)}</span><h3>${escapeHtml(item.name)} <small>${escapeHtml(item.version)}</small></h3><p>${escapeHtml(item.description)}</p><small>${item.sha256 ? "SHA-256: " + escapeHtml(item.sha256) : "Checksum chưa được công bố"}</small></div><div class="release-actions">${renderPlatformDownloadActions(item, API_BASE)}</div></article>`;
+  const screenshotsMarkup = (Array.isArray(item.screenshots) ? item.screenshots : []).slice(0, 8).map((shot, index) => {
+    const rawUrl = typeof shot === "string" ? shot : shot?.url;
+    const href = safeHref(rawUrl);
+    if (!href || !href.startsWith("https://")) return "";
+    const caption = typeof shot === "string" ? "" : String(shot?.caption || "");
+    const alt = caption || `${item.name} · ảnh ${index + 1}`;
+    return `<a class="screenshot-thumb" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(href)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>`;
+  }).join("");
+  const screenshotSection = screenshotsMarkup ? `<div class="screenshot-strip" aria-label="Ảnh chụp màn hình ứng dụng">${screenshotsMarkup}</div>` : "";
+  $("#release-list").innerHTML = `<article class="release-card"><div><span class="release-platform">${escapeHtml(item.platform)}</span><h3>${escapeHtml(item.name)} <small>${escapeHtml(item.version)}</small></h3><p>${escapeHtml(item.description)}</p>${screenshotSection}<small>${item.sha256 ? "SHA-256: " + escapeHtml(item.sha256) : "Checksum chưa được công bố"}</small></div><div class="release-actions">${renderPlatformDownloadActions(item, API_BASE)}</div></article>`;
   $("#releases").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function renderReleases() {
