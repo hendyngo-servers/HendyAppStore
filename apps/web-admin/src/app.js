@@ -340,6 +340,7 @@ async function saveMetadata(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const payload = Object.fromEntries(new FormData(form).entries());
+  payload.screenshots = String(payload.screenshots || "").split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
   const button = form.querySelector('button[type="submit"]');
   button.disabled = true;
   setNotice("#metadata-result", "Đang lưu metadata vào D1…");
