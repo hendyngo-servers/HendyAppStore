@@ -8,7 +8,7 @@
   },
   "scripts": {
     "validate": "node scripts/validate-structure.mjs",
-    "test": "node --test tests/access.test.mjs tests/github-sync.test.mjs tests/self-healing.test.mjs tests/shared-types.test.mjs tests/platform-downloads.test.mjs tests/schema.test.mjs tests/artifact-upload.test.mjs tests/device-detect.test.mjs",
+    "test": "node --test tests/access.test.mjs tests/github-sync.test.mjs tests/self-healing.test.mjs tests/shared-types.test.mjs tests/platform-downloads.test.mjs tests/schema.test.mjs tests/artifact-upload.test.mjs tests/device-detect.test.mjs tests/automation-secrets.test.mjs",
     "build": "npm run build:admin && node scripts/build.mjs",
     "heal:check": "node workers/self-healing-bot/src/index.js --check",
     "heal:repair": "node workers/self-healing-bot/src/index.js --repair",
