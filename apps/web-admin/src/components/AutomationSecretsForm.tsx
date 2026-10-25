@@ -48,6 +48,7 @@ export function AutomationSecretsForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastSync, setLastSync] = useState("");
+  const [certificateResetKey, setCertificateResetKey] = useState(0);
 
   const statusMap = useMemo(() => new Map(statuses.map((s) => [s.name, s])), [statuses]);
   const refreshStatuses = useCallback(async (token = values.GITHUB_SYNC_TOKEN || "") => {
@@ -108,6 +109,7 @@ export function AutomationSecretsForm() {
       setStatusAvailable(true);
       setLastSync(new Date().toLocaleString());
       setValues({ ...EMPTY_VALUES });
+      setCertificateResetKey((key) => key + 1);
       setMessage(`Đồng bộ xong: ${(data.updated || []).length} mục cập nhật; ${(data.skipped || []).length} mục trống được giữ nguyên. Giá trị secrets không được trả về trình duyệt.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không đồng bộ được cấu hình.");
@@ -143,8 +145,8 @@ export function AutomationSecretsForm() {
           })}
         </div>
       </fieldset>)}
-      <div className="automation-actions"><button className="button primary" type="submit" disabled={busy}>{busy ? "Đang đồng bộ…" : "Mã hóa & đồng bộ lên GitHub"}</button><button className="button secondary" type="button" disabled={busy} onClick={() => setValues({ ...EMPTY_VALUES })}>Xóa dữ liệu đang nhập</button><span>{lastSync ? `Lần đồng bộ gần nhất: ${lastSync}` : "Không lưu dữ liệu biểu mẫu vào browser storage."}</span></div>
+      <div className="automation-actions"><button className="button primary" type="submit" disabled={busy}>{busy ? "Đang đồng bộ…" : "Mã hóa & đồng bộ lên GitHub"}</button><button className="button secondary" type="button" disabled={busy} onClick={() => { setValues({ ...EMPTY_VALUES }); setCertificateResetKey((key) => key + 1); }}>Xóa dữ liệu đang nhập</button><span>{lastSync ? `Lần đồng bộ gần nhất: ${lastSync}` : "Không lưu dữ liệu biểu mẫu vào browser storage."}</span></div>
     </form>
-    <CertUploadSecure onEncoded={acceptCertificate} onClear={(name) => setField(name, "")} disabled={busy} />
+    <CertUploadSecure onEncoded={acceptCertificate} onClear={(name) => setField(name, "")} resetKey={certificateResetKey} disabled={busy} />
   </section>;
 }
