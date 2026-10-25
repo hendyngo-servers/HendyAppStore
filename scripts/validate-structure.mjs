@@ -23,7 +23,7 @@ const required = [
   "workers/backend-api/src/github-sync.js", "workers/backend-api/src/db/schema.sql",
   "workers/self-healing-bot/src/index.js", "workers/self-healing-bot/src/llm-analyzer.js",
   "workers/alert-notifier/src/index.js", "scripts/provision-cloudflare-resources.mjs",
-  "scripts/render-cloudflare-config.mjs", ".github/workflows/matrix-build.yml",
+  "scripts/render-cloudflare-config.mjs", "scripts/prepare-pages.mjs", "scripts/smoke-test.mjs", ".github/workflows/matrix-build.yml",
   ".github/workflows/deploy-cloudflare.yml", ".github/workflows/store-release.yml",
   ".github/workflows/build-status-callback.yml", "wrangler.toml",
   "android/settings.gradle", "android/app/src/main/AndroidManifest.xml",
