@@ -41,7 +41,7 @@ assert.match(root, /STATIC_ASSETS/);
 assert.doesNotMatch(root, /^service\s*=\s*"hendy-app-store-api"\s*$/m,
   "Root Workers Builds config must not depend on the API Worker being provisioned first.");
 assert.match(root, /not_found_handling = "none"/, "Worker assets must leave unmatched route handling to the router.");
-assert.ok(root.includes('run_worker_first = ["/api*", "/admin*", "/web-admin/*"]'),
+assert.ok(root.includes('run_worker_first = ["/api*", "/admin*", "/web-admin", "/web-admin/*"]'),
   "Admin/API paths must run through the Worker before matching static files are served.");
 const productionEdge = readFileSync("workers/edge-router/wrangler.toml", "utf8");
 assert.match(productionEdge, /name = "hendy-app-store-edge"/);
