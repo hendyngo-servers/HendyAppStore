@@ -48,6 +48,7 @@ export default {
       headers.set("X-Content-Type-Options", "nosniff");
       headers.set("Referrer-Policy", "same-origin");
       headers.set("X-Frame-Options", "DENY");
+      headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net; worker-src blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
       return new Response(response.body, { status: response.status, headers });
     }
 
@@ -62,6 +63,7 @@ export default {
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set("X-Frame-Options", "DENY");
+    headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
     return new Response(response.body, { status: response.status, headers });
   }
 };
