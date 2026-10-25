@@ -38,12 +38,33 @@ if (!buckets.some((bucket) => bucket.name === "hendy-app-store-releases")) {
 }
 
 const pages = list(await api(`/accounts/${account}/pages/projects`), ["projects"]);
-let pagesProject = pages.find((project) => project.name === "hendy-app-store");
+const requestedPagesProjectName = String(process.env.CLOUDFLARE_PAGES_PROJECT_NAME || "hendy-app-store").toLowerCase();
+let pagesProject = pages.find((project) => project.name === requestedPagesProjectName);
 if (!pagesProject) {
-  pagesProject = await api(`/accounts/${account}/pages/projects`, { method: "POST", body: JSON.stringify({ name: "hendy-app-store", production_branch: "main" }) });
-  console.log("Created Cloudflare Pages project hendy-app-store");
+  try {
+    pagesProject = await api(`/accounts/${account}/pages/projects`, {
+      method: "POST",
+      body: JSON.stringify({ name: requestedPagesProjectName, production_branch: "main" })
+    });
+    console.log("Created Cloudflare Pages project " + requestedPagesProjectName);
+  } catch (error) {
+    // Pages subdomains are global. Try an account-specific name only for project-name collisions.
+    if (!/HTTP 409|already exists|already taken|subdomain.*(used|taken|exists)|conflict/i.test(String(error?.message || error))) throw error;
+    const fallbackName = requestedPagesProjectName + "-" + account.slice(0, 6).toLowerCase();
+    pagesProject = pages.find((project) => project.name === fallbackName);
+    if (!pagesProject) {
+      pagesProject = await api(`/accounts/${account}/pages/projects`, {
+        method: "POST",
+        body: JSON.stringify({ name: fallbackName, production_branch: "main" })
+      });
+      console.log("Created fallback Cloudflare Pages project " + fallbackName);
+    } else {
+      console.log("Reusing fallback Cloudflare Pages project " + fallbackName);
+    }
+  }
 }
-const rawPagesDomain = String(pagesProject?.subdomain || "hendy-app-store.pages.dev")
+const actualPagesProjectName = String(pagesProject?.name || requestedPagesProjectName);
+const rawPagesDomain = String(pagesProject?.subdomain || actualPagesProjectName + ".pages.dev")
   .replace(/^https?:\/\//i, "")
   .replace(/\/.*$/, "")
   .toLowerCase();
@@ -108,7 +129,8 @@ const values = {
   api_base: `https://hendy-app-store-api.${subdomain}.workers.dev`,
   edge_base: `https://hendy-app-store-edge.${subdomain}.workers.dev`,
   alerts_base: `https://hendy-app-store-alerts.${subdomain}.workers.dev`,
-  pages_base: `https://${pagesDomain}`
+  pages_base: `https://${pagesDomain}`,
+  pages_project_name: actualPagesProjectName
 };
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n");
 console.log(JSON.stringify({ resources: ["R2:hendy-app-store-releases", "Pages:hendy-app-store", "D1:hendy-app-store-db", "KV:hendy-app-store-config", "Queue:hendy-app-store-builds", "Queue:hendy-app-store-builds-dlq"], workerUrls: { api: values.api_base, edge: values.edge_base, alerts: values.alerts_base }, d1Id, kvId, workersSubdomain: subdomain }, null, 2));
