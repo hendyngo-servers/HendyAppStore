@@ -3,6 +3,7 @@ import { syncFilesToGitHub } from "./github-sync.js";
 import { analyzeProjectFiles } from "../../self-healing-bot/src/index.js";
 import { proposeSafePatches } from "../../self-healing-bot/src/llm-analyzer.js";
 import { normalizeAppMetadata, normalizeHttpsUrl } from "../../../packages/shared-types/src/index.js";
+import sodium from "libsodium-wrappers-sumo";
 
 const API = "https://api.github.com";
 const MAX_BODY = 12 * 1024 * 1024;
@@ -41,7 +42,7 @@ function withCors(response, request, env) {
   const headers = new Headers(response.headers);
   Object.entries(corsHeaders(request, env)).forEach(([k,v]) => headers.set(k,v));
   headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type,Authorization,CF-Access-JWT-Assertion");
+  headers.set("Access-Control-Allow-Headers", "Content-Type,Authorization,CF-Access-JWT-Assertion,x-hendy-github-token");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "same-origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -195,6 +196,158 @@ async function githubApi(path, env, init = {}) {
   if (!response.ok) throw new Error("GitHub API returned HTTP " + response.status + ": " + String(data.message || "request failed").slice(0, 300));
   return data;
 }
+export const AUTOMATION_FIELDS = Object.freeze([
+  { name: "CF_ACCESS_AUD", kind: "variable" },
+  { name: "CF_ACCESS_ADMIN_EMAILS", kind: "variable" },
+  { name: "ALLOWED_ORIGINS", kind: "variable" },
+  { name: "GITHUB_SYNC_TOKEN", kind: "secret" },
+  { name: "LLM_API_KEY", kind: "secret" },
+  { name: "AUTO_HEAL_ENABLED", kind: "variable" },
+  { name: "SELF_HEAL_WEBHOOK_SECRET", kind: "secret" },
+  { name: "DISCORD_WEBHOOK_URL", kind: "secret" },
+  { name: "ANDROID_PACKAGE_NAME", kind: "variable" },
+  { name: "ANDROID_KEYSTORE_BASE64", kind: "secret" },
+  { name: "ANDROID_KEYSTORE_PASSWORD", kind: "secret" },
+  { name: "ANDROID_KEY_ALIAS", kind: "variable" },
+  { name: "ANDROID_KEY_PASSWORD", kind: "secret" },
+  { name: "IOS_APP_IDENTIFIER", kind: "variable" },
+  { name: "IOS_CERTIFICATE_P12_BASE64", kind: "secret" },
+  { name: "IOS_CERTIFICATE_PASSWORD", kind: "secret" },
+  { name: "IOS_PROVISION_PROFILE_BASE64", kind: "secret" },
+  { name: "IOS_SIGNING_IDENTITY", kind: "variable" },
+  { name: "MACOS_CERTIFICATE_P12_BASE64", kind: "secret" },
+  { name: "MACOS_CERTIFICATE_PASSWORD", kind: "secret" },
+  { name: "MACOS_SIGNING_IDENTITY", kind: "variable" },
+  { name: "APPLE_ID", kind: "variable" },
+  { name: "APPLE_TEAM_ID", kind: "variable" },
+  { name: "APPLE_APP_SPECIFIC_PASSWORD", kind: "secret" },
+  { name: "WINDOWS_CERT_PFX_BASE64", kind: "secret" },
+  { name: "WINDOWS_CERT_PASSWORD", kind: "secret" }
+]);
+const AUTOMATION_FIELD_MAP = new Map(AUTOMATION_FIELDS.map((field) => [field.name, field]));
+const DERIVED_CALLBACK_VARIABLE = "BUILD_STATUS_WEBHOOK_URL";
+const MAX_GITHUB_ACTION_VALUE_BYTES = 48000;
+
+async function githubActionsRequest(token, env, endpoint, init = {}) {
+  const owner = String(env.GITHUB_OWNER || "");
+  const repo = String(env.GITHUB_REPO || "");
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
+    throw new Error("GitHub owner/repository is not configured correctly in the Worker.");
+  }
+  const response = await fetch(`${API}/repos/${owner}/${repo}/actions/${endpoint}`, {
+    ...init,
+    headers: {
+      Authorization: "Bearer " + token,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json",
+      ...(init.headers || {})
+    }
+  });
+  const text = await response.text();
+  let data = {};
+  if (text) { try { data = JSON.parse(text); } catch { data = {}; } }
+  if (!response.ok) throw new Error(`GitHub Actions API request failed (HTTP ${response.status}). Check token scope and repository permissions.`);
+  return data;
+}
+function automationStatusPayload(secretNames, variableNames, statusAvailable = true) {
+  const secrets = new Set(secretNames);
+  const variables = new Set(variableNames);
+  return {
+    success: true,
+    statusAvailable,
+    requiresToken: !statusAvailable,
+    statuses: AUTOMATION_FIELDS.map((field) => ({
+      name: field.name,
+      kind: field.kind,
+      configured: field.kind === "secret" ? secrets.has(field.name) : variables.has(field.name)
+    })),
+    callbackUrlConfigured: variables.has(DERIVED_CALLBACK_VARIABLE)
+  };
+}
+async function getAutomationStatus(token, env) {
+  if (!token) return automationStatusPayload([], [], false);
+  const [secretData, variableData] = await Promise.all([
+    githubActionsRequest(token, env, "secrets?per_page=100"),
+    githubActionsRequest(token, env, "variables?per_page=100")
+  ]);
+  return automationStatusPayload(
+    (secretData.secrets || []).map((item) => item.name),
+    (variableData.variables || []).map((item) => item.name),
+    true
+  );
+}
+function normalizeAutomationValues(values) {
+  if (!values || typeof values !== "object" || Array.isArray(values)) throw new Error("Values must be a JSON object.");
+  const unknown = Object.keys(values).filter((name) => !AUTOMATION_FIELD_MAP.has(name));
+  if (unknown.length) throw new Error("Unsupported configuration field: " + unknown.slice(0, 3).join(", "));
+  const normalized = {};
+  for (const [name, input] of Object.entries(values)) {
+    if (typeof input !== "string") throw new Error(name + " must be a string.");
+    if (input.trim() === "") continue;
+    if (input.includes("\\u0000")) throw new Error(name + " contains an invalid NUL character.");
+    let value = input;
+    if (name === "AUTO_HEAL_ENABLED" && value !== "true" && value !== "false") throw new Error("AUTO_HEAL_ENABLED must be true or false.");
+    if (name.endsWith("_BASE64")) {
+      value = value.replace(/\\s+/g, "");
+      if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+        throw new Error(name + " must contain valid Base64.");
+      }
+    }
+    const bytes = new TextEncoder().encode(value).byteLength;
+    if (bytes > MAX_GITHUB_ACTION_VALUE_BYTES) {
+      throw new Error(name + " exceeds GitHub's 48 KiB value limit. Use a smaller certificate or store large binary files in R2.");
+    }
+    normalized[name] = value;
+  }
+  return normalized;
+}
+async function updateAutomationValues(inputValues, env) {
+  const values = normalizeAutomationValues(inputValues);
+  const token = String(values.GITHUB_SYNC_TOKEN || env.GITHUB_SYNC_TOKEN || "").trim();
+  if (!token) throw new Error("Enter GITHUB_SYNC_TOKEN or configure it as a Worker secret before syncing GitHub Actions values.");
+  const entries = Object.entries(values);
+  if (!entries.length) throw new Error("No values were provided. Empty fields are deliberately skipped to avoid overwriting existing settings.");
+  const variableEntries = entries.filter(([name]) => AUTOMATION_FIELD_MAP.get(name).kind === "variable");
+  const secretEntries = entries.filter(([name]) => AUTOMATION_FIELD_MAP.get(name).kind === "secret");
+  let publicKey = null;
+  let sodiumReady = false;
+  if (secretEntries.length) {
+    publicKey = await githubActionsRequest(token, env, "secrets/public-key");
+    if (!publicKey?.key || !publicKey?.key_id) throw new Error("GitHub did not return the repository Actions public key.");
+    await sodium.ready;
+    sodiumReady = true;
+  }
+  const existingVariables = variableEntries.length
+    ? await githubActionsRequest(token, env, "variables?per_page=100")
+    : { variables: [] };
+  const existingVariableNames = new Set((existingVariables.variables || []).map((item) => item.name));
+  const updated = [];
+  const skipped = AUTOMATION_FIELDS.map((field) => field.name).filter((name) => !Object.prototype.hasOwnProperty.call(values, name));
+
+  for (const [name, value] of secretEntries) {
+    if (!sodiumReady) await sodium.ready;
+    const keyBytes = sodium.from_base64(publicKey.key, sodium.base64_variants.ORIGINAL);
+    const encrypted = sodium.crypto_box_seal(sodium.from_string(value), keyBytes);
+    const encryptedValue = sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL);
+    await githubActionsRequest(token, env, "secrets/" + encodeURIComponent(name), {
+      method: "PUT",
+      body: JSON.stringify({ encrypted_value: encryptedValue, key_id: publicKey.key_id })
+    });
+    updated.push(name);
+  }
+  for (const [name, value] of variableEntries) {
+    const existing = existingVariableNames.has(name);
+    await githubActionsRequest(token, env, existing ? "variables/" + encodeURIComponent(name) : "variables", {
+      method: existing ? "PATCH" : "POST",
+      body: JSON.stringify(existing ? { value } : { name, value })
+    });
+    updated.push(name);
+  }
+  const status = await getAutomationStatus(token, env);
+  return { ...status, updated, skipped, note: "GitHub secret values were sealed with the repository public key. Secret values are never returned." };
+}
+
 async function getBuildStatus(env) {
   const builds = [];
   if (env.GITHUB_SYNC_TOKEN) {
@@ -551,6 +704,22 @@ async function handle(request, env) {
     const auth = await requireAdmin(request, env);
     if (!auth.ok) return auth;
     if (request.method === "GET" && path === "/api/admin/status") return json({ success: true, authenticated: true, email: auth.email });
+    if (request.method === "GET" && path === "/api/admin/github/automation-secrets") {
+      try {
+        const suppliedToken = String(request.headers.get("x-hendy-github-token") || "").trim();
+        return json(await getAutomationStatus(suppliedToken || env.GITHUB_SYNC_TOKEN || "", env));
+      } catch (error) {
+        return json({ success: false, error: error.message, statusAvailable: false }, 502);
+      }
+    }
+    if (request.method === "POST" && path === "/api/admin/github/automation-secrets") {
+      try {
+        const body = await readJson(request);
+        return json(await updateAutomationValues(body.values, env), 200);
+      } catch (error) {
+        return json({ success: false, error: String(error?.message || "GitHub automation sync failed.").slice(0, 600) }, 400);
+      }
+    }
     if (request.method === "GET" && path === "/api/admin/builds") return json({ success: true, builds: await getBuildStatus(env) });
     if (request.method === "GET" && path === "/api/admin/releases") return listAdminReleases(env);
     if (request.method === "GET" && path === "/api/admin/apps") return listApps(env);
