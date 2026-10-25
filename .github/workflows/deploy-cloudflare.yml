@@ -54,7 +54,6 @@ jobs:
           CF_ACCESS_ADMIN_EMAILS: ${{ vars.CF_ACCESS_ADMIN_EMAILS || secrets.CF_ACCESS_ADMIN_EMAILS }}
           SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
           AUTO_HEAL_ENABLED: ${{ vars.AUTO_HEAL_ENABLED || secrets.AUTO_HEAL_ENABLED || 'false' }}
-          SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +96,7 @@ jobs:
           GITHUB_SYNC_TOKEN: ${{ secrets.GITHUB_SYNC_TOKEN }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           AUTO_HEAL_ENABLED: ${{ vars.AUTO_HEAL_ENABLED || secrets.AUTO_HEAL_ENABLED || 'false' }}
+          SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -104,7 +104,6 @@ jobs:
           printf '%s' "$CF_ACCESS_AUD" | npx --yes wrangler@4 secret put CF_ACCESS_AUD --config workers/backend-api/wrangler.toml
           printf '%s' "$CF_ACCESS_ADMIN_EMAILS" | npx --yes wrangler@4 secret put CF_ACCESS_ADMIN_EMAILS --config workers/backend-api/wrangler.toml
           printf '%s' "$AUTO_HEAL_ENABLED" | npx --yes wrangler@4 secret put AUTO_HEAL_ENABLED --config workers/backend-api/wrangler.toml
-          if [ -n "${SELF_HEAL_WEBHOOK_SECRET:-}" ]; then printf '%s' "$SELF_HEAL_WEBHOOK_SECRET" | npx --yes wrangler@4 secret put SELF_HEAL_WEBHOOK_SECRET --config workers/backend-api/wrangler.toml; fi
           if [ -n "${GITHUB_SYNC_TOKEN:-}" ]; then printf '%s' "$GITHUB_SYNC_TOKEN" | npx --yes wrangler@4 secret put GITHUB_SYNC_TOKEN --config workers/backend-api/wrangler.toml; else echo "::warning::GITHUB_SYNC_TOKEN missing; source sync and GitHub build dispatch won't work."; fi
           if [ -n "${LLM_API_KEY:-}" ]; then printf '%s' "$LLM_API_KEY" | npx --yes wrangler@4 secret put LLM_API_KEY --config workers/backend-api/wrangler.toml; else echo "::warning::LLM_API_KEY missing; AI patch proposals remain disabled."; fi
       - name: Deploy Alert Notifier Worker
@@ -118,7 +117,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
           BUILD_STATUS_WEBHOOK_SECRET: ${{ secrets.BUILD_STATUS_WEBHOOK_SECRET }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          SELF_HEAL_WEBHOOK_SECRET: ${{ secrets.SELF_HEAL_WEBHOOK_SECRET }}
           AUTO_HEAL_ENABLED: ${{ vars.AUTO_HEAL_ENABLED || secrets.AUTO_HEAL_ENABLED || 'false' }}
         shell: bash
         run: |
@@ -126,7 +124,6 @@ jobs:
           if [ -n "${BUILD_STATUS_WEBHOOK_SECRET:-}" ]; then printf '%s' "$BUILD_STATUS_WEBHOOK_SECRET" | npx --yes wrangler@4 secret put BUILD_STATUS_WEBHOOK_SECRET --config workers/alert-notifier/wrangler.toml; else echo "::warning::BUILD_STATUS_WEBHOOK_SECRET missing; authenticated workflow callbacks are disabled."; fi
           if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then printf '%s' "$DISCORD_WEBHOOK_URL" | npx --yes wrangler@4 secret put DISCORD_WEBHOOK_URL --config workers/alert-notifier/wrangler.toml; fi
           printf '%s' "$AUTO_HEAL_ENABLED" | npx --yes wrangler@4 secret put AUTO_HEAL_ENABLED --config workers/alert-notifier/wrangler.toml
-          if [ -n "${SELF_HEAL_WEBHOOK_SECRET:-}" ]; then printf '%s' "$SELF_HEAL_WEBHOOK_SECRET" | npx --yes wrangler@4 secret put SELF_HEAL_WEBHOOK_SECRET --config workers/alert-notifier/wrangler.toml; fi
       - name: Deploy Edge Router Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
