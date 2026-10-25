@@ -1,5 +1,9 @@
-# Canonical edge router config; no secrets are stored in this file.
-name = "hendy-app-store-edge"
+# Standalone Cloudflare Workers Builds entry point.
+# This config intentionally has no Backend API service binding so the first build
+# can deploy even before the production API Worker is provisioned.
+# The full integrated production router is deployed with:
+# workers/edge-router/wrangler.toml via .github/workflows/deploy-cloudflare.yml
+name = "hendyappstore"
 main = "workers/edge-router/src/index.js"
 compatibility_date = "2026-10-25"
 workers_dev = true
@@ -7,15 +11,9 @@ workers_dev = true
 [assets]
 directory = "./apps"
 binding = "STATIC_ASSETS"
-# Keep unmatched routes in the Worker so /admin and /api routing/access checks run.
 not_found_handling = "none"
-# Route protected/API requests through the Worker before serving a matching static asset.
 run_worker_first = ["/api*", "/admin*", "/web-admin/*"]
 
 [vars]
 APP_NAME = "Hendy App Store"
 ADMIN_HOSTNAMES = ""
-
-[[services]]
-binding = "BACKEND_API"
-service = "hendy-app-store-api"
