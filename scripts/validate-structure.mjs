@@ -13,7 +13,7 @@ const required = [
   "apps/web-admin/src/providers/AuthProvider.js", "apps/web-admin/src/hooks/useVirtualFileTree.js",
   "apps/web-admin/src/components/CodePasteZone.js", "apps/web-admin/src/components/FileUploadZone.js",
   "apps/web-admin/src/components/FileTreeVisualizer.js", "apps/web-admin/src/components/BuildStatusMonitor.js",
-  "apps/web-admin/src/components/StoreMetadataForm.js", "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
+  "apps/web-admin/src/components/StoreMetadataForm.js", "apps/web-admin/src/components/ArtifactDraftForm.js", "apps/web-admin/src/layouts/MobileCMSPocketLayout.js",
   "apps/web-admin/src/layouts/FullDevStudioLayout.js",
   "packages/shared-types/src/index.js", "packages/shared-types/src/index.d.ts", "packages/ui-components/src/index.js",
   "workers/edge-router/src/index.js", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
