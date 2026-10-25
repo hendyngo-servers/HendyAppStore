@@ -23,8 +23,31 @@ async function notifyDiscord(env, payload) {
   ].filter(Boolean).join("\n");
   await fetch(env.DISCORD_WEBHOOK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: content.slice(0, 1900) }) });
 }
+async function triggerAutomaticHeal(env, payload) {
+  if (String(env.AUTO_HEAL_ENABLED || "") !== "true" || !env.BACKEND_API || !env.SELF_HEAL_WEBHOOK_SECRET) return { skipped: true };
+  if (!["failed"].includes(String(payload.status || ""))) return { skipped: true };
+  const body = JSON.stringify({
+    event: "github_actions_build_failed",
+    runId: Number(payload.runId || 0),
+    commitSha: String(payload.commitSha || ""),
+    sourceRef: String(payload.sourceRef || "main"),
+    conclusion: String(payload.conclusion || "failure"),
+    htmlUrl: String(payload.htmlUrl || ""),
+    buildRequestId: String(payload.buildRequestId || "")
+  });
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.SELF_HEAL_WEBHOOK_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)));
+  const signature = "sha256=" + [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const response = await env.BACKEND_API.fetch(new Request("https://hendy-backend.internal/api/internal/self-heal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-hendy-self-heal-signature": signature },
+    body
+  }));
+  if (!response.ok) throw new Error("Self-healing API returned HTTP " + response.status + ": " + (await response.text()).slice(0, 500));
+  return response.json().catch(() => ({ success: true }));
+}
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/healthz") return json({ ok: true, service: "hendy-alert-notifier" });
     if (request.method !== "POST" || url.pathname !== "/webhooks/github/build-status") return json({ ok: false, error: "not_found" }, 404);
@@ -50,6 +73,20 @@ export default {
       }
     }
     try { await notifyDiscord(env, { ...payload, workflow, conclusion: rawStatus, head_sha: run.head_sha, html_url: run.html_url }); } catch { /* notifications must not break the callback */ }
-    return json({ ok: true, stored: !!env.DB, notified: !!env.DISCORD_WEBHOOK_URL });
+    let autoHealQueued = false;
+    if (normalizedStatus === "failed" && String(env.AUTO_HEAL_ENABLED || "") === "true" && env.BACKEND_API && env.SELF_HEAL_WEBHOOK_SECRET) {
+      const task = triggerAutomaticHeal(env, {
+        status: normalizedStatus,
+        runId: Number(run.id || 0),
+        commitSha: String(run.head_sha || ""),
+        sourceRef: String(run.head_branch || "main"),
+        conclusion: rawStatus,
+        htmlUrl: String(run.html_url || ""),
+        buildRequestId: requestedBuildId
+      }).catch((error) => { console.error("Automatic self-heal dispatch failed:", String(error?.message || error).slice(0, 500)); });
+      if (ctx?.waitUntil) { ctx.waitUntil(task); autoHealQueued = true; }
+      else { await task; autoHealQueued = true; }
+    }
+    return json({ ok: true, stored: !!env.DB, notified: !!env.DISCORD_WEBHOOK_URL, autoHealQueued });
   }
 };
