@@ -4,6 +4,8 @@ import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 
 const required = [
+  "functions/_middleware.js", "functions/_lib/backend.js", "functions/api/auth.js", "functions/api/sync-logs.js", "functions/api/[[path]].js",
+  "packages/db-schema/package.json", "packages/db-schema/migrations/0001_initial.sql", "packages/db-schema/validate.mjs",
   "apps/web-user/index.html", "apps/web-user/src/app.js", "apps/web-user/src/components/PlatformDownloadActions.js",
   "apps/web-user/src/components/IOSOtaDownloader.js", "apps/web-user/src/components/MacOsDmgDownloader.js",
   "apps/web-user/src/components/AndroidDirectLink.js", "apps/web-user/src/components/WindowsSafeInstaller.js",
@@ -35,6 +37,15 @@ assert.deepEqual(missing, [], "Required architecture files are missing: " + miss
 for (const path of [".github/workflows/deploy-render.yml", "server.ts", "src/App.tsx", "public/index.html"]) {
   assert.equal(existsSync(path), false, `Legacy source should not exist after rewrite: ${path}`);
 }
+const rootManifest = JSON.parse(readFileSync("package.json", "utf8"));
+assert.ok(rootManifest.workspaces?.includes("apps/web-user") && rootManifest.workspaces?.includes("apps/web-admin"), "Root npm workspaces must include both UI packages.");
+assert.ok(rootManifest.workspaces?.includes("packages/shared-types") && rootManifest.workspaces?.includes("packages/db-schema"), "Root npm workspaces must include shared types and D1 schema.");
+const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
+assert.match(deployEntry, /push:/);
+assert.match(deployEntry, /\.\/\.github\/workflows\/deploy-cloudflare\.yml/);
+const pagesMiddleware = readFileSync("functions/_middleware.js", "utf8");
+assert.match(pagesMiddleware, /api\/admin\/status/);
+assert.match(pagesMiddleware, /context\.next\(new Request\(rewritten, request\)\)/);
 const root = readFileSync("wrangler.toml", "utf8");
 assert.match(root, /name = "hendyappstore"/, "Root config must match the Cloudflare Workers Builds worker name.");
 assert.match(root, /STATIC_ASSETS/);
@@ -59,6 +70,9 @@ const matrix = readFileSync(".github/workflows/matrix-build.yml", "utf8");
 for (const runner of ["ubuntu-latest", "windows-2025", "macos-latest"]) assert.ok(matrix.includes(runner), "Matrix runner missing: " + runner);
 assert.ok(matrix.includes("detect-targets") && matrix.includes("fromJson(needs.detect-targets.outputs.matrix)"), "Dynamic target matrix is missing.");
 assert.equal(/render[.]com/i.test(matrix), false, "Render deployment must remain removed.");
+const schemaMigration = readFileSync("packages/db-schema/migrations/0001_initial.sql", "utf8").trim();
+const runtimeSchema = readFileSync("workers/backend-api/src/db/schema.sql", "utf8").trim();
+assert.equal(schemaMigration, runtimeSchema, "D1 migration and runtime schema must stay in sync.");
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 for (const dependency of ["libsodium-wrappers-sumo", "react", "react-dom"]) assert.ok(manifest.dependencies?.[dependency], "Root dependency missing: " + dependency);
 assert.ok(manifest.devDependencies?.esbuild, "esbuild is required to bundle the React Admin panels.");
