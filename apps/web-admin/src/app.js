@@ -30,6 +30,7 @@ function dashboardContent() {
     <div id="build-monitor-anchor">${buildStatusMonitor()}</div>
       ${storeMetadataForm()}
       ${artifactDraftForm()}
+      <div id="automation-secrets-root" class="automation-react-root"></div>
     </div>
     <aside class="workspace-sidebar">
       <section id="tree" class="panel tree-panel"><div class="panel-heading"><div><p class="eyebrow">VIRTUAL FILE SYSTEM</p><h2>Cây thư mục</h2></div><span id="file-count" class="count-badge">0</span></div><div id="tree-summary" class="tree-summary">Chưa có tệp</div><div id="file-tree" class="file-tree"><div class="tree-empty">Thêm mã nguồn để dựng cấu trúc thư mục.</div></div><div class="tree-footer"><button id="clear-files" class="text-button">Xóa danh sách cục bộ</button></div></section>
