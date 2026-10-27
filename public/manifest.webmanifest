@@ -1,0 +1,19 @@
+{
+  "name": "Hendy Store",
+  "short_name": "Hendy",
+  "description": "Kho ứng dụng, phần mềm và bản phát hành chính thức của Hendy.",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
