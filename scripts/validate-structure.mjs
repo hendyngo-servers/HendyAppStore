@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 const required = [
   "functions/_middleware.js", "functions/_lib/backend.js", "functions/api/auth.js", "functions/api/sync-logs.js", "functions/api/[[path]].js",
+  "public/favicon.svg", "public/manifest.webmanifest", "public/robots.txt", "automation/README.md",
   "packages/db-schema/package.json", "packages/db-schema/migrations/0001_initial.sql", "packages/db-schema/validate.mjs",
   "apps/web-user/index.html", "apps/web-user/src/app.js", "apps/web-user/src/components/PlatformDownloadActions.js",
   "apps/web-user/src/components/IOSOtaDownloader.js", "apps/web-user/src/components/MacOsDmgDownloader.js",
@@ -42,7 +43,11 @@ assert.ok(rootManifest.workspaces?.includes("apps/web-user") && rootManifest.wor
 assert.ok(rootManifest.workspaces?.includes("packages/shared-types") && rootManifest.workspaces?.includes("packages/db-schema"), "Root npm workspaces must include shared types and D1 schema.");
 const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
 assert.match(deployEntry, /push:/);
+assert.match(deployEntry, /branches:\s*\[main\]/, "Cloudflare deployment must auto-run on pushes to main.");
 assert.match(deployEntry, /npx wrangler pages deploy/);
+const pagesBuild = readFileSync("scripts/prepare-pages.mjs", "utf8");
+assert.match(pagesBuild, /cp\("public", output, \{ recursive: true \}\)/, "Shared public assets must be copied into Pages output.");
+assert.match(readFileSync("apps/web-user/index.html", "utf8"), /manifest\.webmanifest/, "Storefront should link its PWA manifest.");
 assert.match(deployEntry, /wrangler pages deploy/);
 assert.ok(existsSync("functions/_middleware.js") && existsSync("functions/api/[[path]].js"), "Pages Functions source must be present for Wrangler's automatic Functions bundling.");
 assert.match(deployEntry, /HENDY_API_BASE_URL/);
