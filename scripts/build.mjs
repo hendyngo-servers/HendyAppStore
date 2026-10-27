@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 const output = "dist/pages";
 await rm("dist", { recursive: true, force: true });
 await mkdir(output, { recursive: true });
+if (existsSync("public")) await cp("public", output, { recursive: true });
 const source = "apps/web-user";
 await copyFile(`${source}/index.html`, `${output}/index.html`);
 await copyFile(`${source}/_headers`, `${output}/_headers`);
