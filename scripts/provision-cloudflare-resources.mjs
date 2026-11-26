@@ -129,8 +129,9 @@ const values = {
   api_base: `https://hendy-app-store-api.${subdomain}.workers.dev`,
   edge_base: `https://hendy-app-store-edge.${subdomain}.workers.dev`,
   alerts_base: `https://hendy-app-store-alerts.${subdomain}.workers.dev`,
+  telegram_bot_base: `https://hendy-app-store-telegram-bot.${subdomain}.workers.dev`,
   pages_base: `https://${pagesDomain}`,
   pages_project_name: actualPagesProjectName
 };
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n") + "\n");
-console.log(JSON.stringify({ resources: ["R2:hendy-app-store-releases", "Pages:hendy-app-store", "D1:hendy-app-store-db", "KV:hendy-app-store-config", "Queue:hendy-app-store-builds", "Queue:hendy-app-store-builds-dlq"], workerUrls: { api: values.api_base, edge: values.edge_base, alerts: values.alerts_base }, d1Id, kvId, workersSubdomain: subdomain }, null, 2));
+console.log(JSON.stringify({ resources: ["R2:hendy-app-store-releases", "Pages:hendy-app-store", "D1:hendy-app-store-db", "KV:hendy-app-store-config", "Queue:hendy-app-store-builds", "Queue:hendy-app-store-builds-dlq"], workerUrls: { api: values.api_base, edge: values.edge_base, alerts: values.alerts_base, telegramBot: values.telegram_bot_base }, d1Id, kvId, workersSubdomain: subdomain }, null, 2));
