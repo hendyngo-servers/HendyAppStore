@@ -1,0 +1,11 @@
+name = "hendy-app-store-telegram-bot"
+main = "./src/index.js"
+compatibility_date = "2026-10-25"
+workers_dev = true
+
+[vars]
+PUBLIC_STORE_URL = "https://hendy-app-store.pages.dev"
+
+[[services]]
+binding = "BACKEND_API"
+service = "hendy-app-store-api"
