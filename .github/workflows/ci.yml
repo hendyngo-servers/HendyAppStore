@@ -50,6 +50,7 @@ jobs:
         run: |
           npx wrangler deploy --dry-run --config workers/backend-api/wrangler.toml
           npx wrangler deploy --dry-run --config workers/alert-notifier/wrangler.toml
+          npx wrangler deploy --dry-run --config workers/telegram-bot/wrangler.toml
           npx wrangler deploy --dry-run --config wrangler.toml
           npx wrangler deploy --dry-run --config workers/edge-router/wrangler.toml
       - name: Verify output tree
