@@ -17,11 +17,12 @@ Hướng dẫn chi tiết từng bước, quyền API token, cấu hình Workers
 - `workers/edge-router/`: Public entry, Admin routing and Backend service binding. `workers/edge-router/wrangler.toml` is the integrated production config and must deploy after `hendy-app-store-api`; the root `wrangler.toml` is a standalone Worker Builds/bootstrap config with no backend binding.
 - `workers/backend-api/`: Cloudflare Access JWT verification, D1 app/build records, KV release cache, R2 artifacts/catalog, GitHub Actions dispatch/status and optional LLM repair proposal routes.
 - `workers/alert-notifier/`: HMAC-verified GitHub Actions callback, D1 build-history update and optional Discord notification.
+- `workers/telegram-bot/`: Telegram webhook Worker connected to the public App Store API; searchable app catalog, published releases, platform filtering and a compact Vietnamese main menu. It does not invent commerce/order/OTP/proxy features that are not backed by this App Store schema.
 - `workers/self-healing-bot/`: Deterministic safe repairs and optional LLM-proposed patches.
 - `android/`, `windows/`, `ios/`, `macos/`: Native wrapper projects that point to the public HTTPS storefront.
 - `.github/workflows/matrix-build.yml`: Native build matrix; isolated signing job; publish only verified, signed products to R2.
 - `.github/workflows/store-release.yml`: Manual gated upload to Google Play or App Store Connect/TestFlight.
-- `.github/workflows/deploy-cloudflare.yml`: Provision and deploy R2, Pages, D1, KV, Queues, API Worker, Alert Worker and Edge Router. No Render deployment code remains.
+- `.github/workflows/deploy-cloudflare.yml`: Provision and deploy R2, Pages, D1, KV, Queues, API Worker, Alert Worker, Telegram Bot Worker and Edge Router. Telegram webhook registration is enabled only when both Telegram secrets are present. No Render deployment code remains.
 
 ## Monorepo and Pages Functions layout
 
@@ -33,6 +34,56 @@ Hướng dẫn chi tiết từng bước, quyền API token, cấu hình Workers
 - Root `package.json`: npm workspaces for both apps and shared packages. `vite.config.ts` provides an optional multi-page Vite build; the production deployment continues to use the tested `npm run build` pipeline.
 
 The deployment workflow sets the Pages Functions runtime variable `HENDY_API_BASE_URL` from the provisioned Backend Worker URL. Configure Cloudflare Access so the Pages hostname is covered by an application/policy whose audience matches the Backend API's `CF_ACCESS_AUD`; otherwise the Pages middleware deliberately denies Admin access. Never expose Admin by removing the middleware or bypassing the Backend API Access check.
+
+## Telegram App Store bot
+
+The monorepo includes a separate Cloudflare Worker at `workers/telegram-bot`.
+It reuses the Backend API's public `/api/apps` and `/api/releases` routes
+through a Cloudflare service binding; it does not read D1/R2 directly and does
+not duplicate the application/release catalog.
+
+The Telegram main keyboard is intentionally App Store-focused:
+
+| Menu | Real behaviour |
+|---|---|
+| 🛍 Kho ứng dụng | Lists public apps; buttons show app metadata |
+| 🔎 Tìm ứng dụng | Searches name, slug, description and category |
+| 📦 Bản phát hành | Lists published releases with valid HTTPS download links |
+| 📲 Tải theo nền tảng | Filters Android, Windows, macOS, iOS, Linux and Web releases |
+| 🌐 Mở Hendy Store | Opens the provisioned public Pages storefront |
+| ❔ Trợ giúp | Explains the supported App Store actions |
+
+The older Mini Game, Tool rental, OTP, Proxy, VIP, Matchmaking, Vietsub,
+Giftcode, referral, order-history and AI menu items are not exposed by this
+App Store bot because this repository does not contain their service backends
+or user/order schema. They must be integrated from their actual service
+repositories before being offered as live actions.
+
+### Enable the Telegram webhook
+
+Set both GitHub Environment secrets under
+**Settings → Environments → cloudflare-production**:
+
+- `TELEGRAM_BOT_TOKEN`: token issued for the Telegram bot.
+- `TELEGRAM_WEBHOOK_SECRET`: a random 1–256 character value using only
+  letters, digits, underscore or hyphen. This is separate from the Bot Token.
+
+Then run **Actions → Deploy Hendy App Store to Cloudflare Workers and Pages**.
+The workflow deploys `hendy-app-store-telegram-bot`, stores the secrets in
+Cloudflare Worker secrets, and registers the webhook with Telegram using the
+Cloudflare `workers.dev` hostname provisioned for the account. If both
+secrets are omitted, the Worker still deploys with a health endpoint but the
+webhook remains disabled.
+
+The webhook accepts only POST requests carrying Telegram's
+`X-Telegram-Bot-Api-Secret-Token` header. It rejects missing/incorrect
+secrets, malformed JSON and update payloads larger than 256 KiB. Bot credentials
+are never stored in D1 or returned from the health endpoint.
+
+The Worker health URL is included in the deployment summary as
+`https://hendy-app-store-telegram-bot.<workers-subdomain>.workers.dev/healthz`.
+The configured public Store origin is injected from the actual Pages hostname,
+including when the Pages provisioner had to choose a fallback project name.
 
 ## Cloudflare dashboard build modes
 
@@ -74,6 +125,8 @@ The Admin form contains exactly **26 core fields**. `BUILD_STATUS_WEBHOOK_URL` i
 | `CF_ACCESS_AUD` | Variable or Secret | Comma-separated AUD tags used by the Access applications |
 | `CF_ACCESS_ADMIN_EMAILS` | Variable or Secret | Comma-separated Admin email allow-list |
 | `GITHUB_SYNC_TOKEN` | Secret | Fine-grained token with repository Contents read/write and Actions read/write for build dispatch |
+| `TELEGRAM_BOT_TOKEN` | Optional Secret in `cloudflare-production` | Telegram Bot API token; enables the App Store bot when used with `TELEGRAM_WEBHOOK_SECRET` |
+| `TELEGRAM_WEBHOOK_SECRET` | Optional Secret in `cloudflare-production` | Secret header value used to authenticate Telegram webhook requests; configure together with the Bot Token |
 | `LLM_API_KEY` | Optional Secret | Enables AI repair proposals; omitted by default |
 | `AUTO_HEAL_ENABLED` | Variable or Secret | Defaults to `false`; set to `true` to enable failure-triggered AI repair and reviewed source-only patches |
 | `SELF_HEAL_WEBHOOK_SECRET` | Optional Secret | Shared HMAC secret between Alert Worker and Backend API for the internal self-healing callback |
