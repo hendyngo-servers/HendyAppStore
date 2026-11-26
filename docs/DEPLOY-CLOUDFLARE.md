@@ -129,6 +129,34 @@ Với một Pages project riêng:
   - `HENDY_EDGE_BASE_URL`: origin HTTPS của Edge Worker, không kèm path `/admin`.
 - Nếu tùy chọn này khác origin của API, thêm chính xác hostname Pages vào `ALLOWED_ORIGINS` của Backend API để CORS chỉ cho phép các trang đáng tin cậy.
 
+## Telegram App Store bot
+
+The deployment provisions and publishes a separate `hendy-app-store-telegram-bot`
+Worker after the Backend API is available. The Worker calls the public catalog
+routes through a Cloudflare service binding and supports the following actions:
+browse public apps, search app metadata, list published releases, filter by
+platform and open the public Pages Store.
+
+To enable the Telegram webhook, configure both secrets in the GitHub
+`cloudflare-production` environment:
+
+- `TELEGRAM_BOT_TOKEN`: Telegram Bot API token.
+- `TELEGRAM_WEBHOOK_SECRET`: 1–256 characters from `A-Z a-z 0-9 _ -`.
+
+The deploy workflow stores both values as Cloudflare Worker secrets and calls
+Telegram `setWebhook` for
+`https://hendy-app-store-telegram-bot.<workers-subdomain>.workers.dev/webhook`.
+When neither secret is configured, the Worker is still deployed with
+`/healthz`, but its webhook returns a fail-closed response and cannot process
+updates. Configure both values and rerun the deployment workflow to activate
+it.
+
+The webhook validates the `X-Telegram-Bot-Api-Secret-Token` header, rejects
+payloads over 256 KiB and exposes no bot token in its health response or logs.
+The current repository has no order, wallet, OTP, proxy, VIP, matchmaking,
+Vietsub or game-service API; those options are intentionally absent from this
+App Store bot menu until their real backends are integrated.
+
 ## 6. Xử lý lỗi phổ biến
 
 | Lỗi/log | Nguyên nhân thường gặp | Cách xử lý |
