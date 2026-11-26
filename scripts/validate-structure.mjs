@@ -45,6 +45,8 @@ const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
 assert.match(deployEntry, /push:/);
 assert.match(deployEntry, /branches:\s*\[main\]/, "Cloudflare deployment must auto-run on pushes to main.");
 assert.match(deployEntry, /npx wrangler pages deploy/);
+assert.match(deployEntry, /workers\/telegram-bot\/wrangler\.toml/, "Automatic main-branch deployment must include the Telegram Worker.");
+assert.match(deployEntry, /TELEGRAM_WEBHOOK_SECRET/, "Automatic deployment must configure the authenticated Telegram webhook when secrets exist.");
 const pagesBuild = readFileSync("scripts/prepare-pages.mjs", "utf8");
 assert.match(pagesBuild, /cp\("public", output, \{ recursive: true \}\)/, "Shared public assets must be copied into Pages output.");
 assert.match(readFileSync("apps/web-user/index.html", "utf8"), /manifest\.webmanifest/, "Storefront should link its PWA manifest.");
