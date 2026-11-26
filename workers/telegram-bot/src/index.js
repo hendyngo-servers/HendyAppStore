@@ -34,18 +34,13 @@ export function safeHttpsUrl(value) {
   }
 }
 
-export function buildMainKeyboard(storeUrl = DEFAULT_STORE_URL) {
-  const safeStoreUrl = safeHttpsUrl(storeUrl) || DEFAULT_STORE_URL;
+export function buildMainKeyboard() {
   return {
     keyboard: MENU_BUTTONS.map((row) => row.map((text) => ({ text }))),
     resize_keyboard: true,
     is_persistent: true,
     input_field_placeholder: "Tìm ứng dụng hoặc chọn chức năng…",
-    selective: false,
-    one_time_keyboard: false,
-    // Telegram reply keyboards do not support URL buttons. The Store URL is
-    // sent separately as an inline button when the user selects the menu item.
-    storeUrl: safeStoreUrl
+    one_time_keyboard: false
   };
 }
 
@@ -82,13 +77,7 @@ function inlineUrlButton(text, url) {
 }
 
 function mainReplyMarkup(env) {
-  return {
-    keyboard: MENU_BUTTONS.map((row) => row.map((text) => ({ text }))),
-    resize_keyboard: true,
-    is_persistent: true,
-    input_field_placeholder: "Tìm ứng dụng hoặc chọn chức năng…",
-    one_time_keyboard: false
-  };
+  return buildMainKeyboard();
 }
 
 async function backendJson(env, path) {
@@ -208,7 +197,7 @@ async function showApps(env, chatId, query = "") {
   const rows = appRows(apps);
   await sendMessage(env, chatId,
     "<b>" + (query ? "KẾT QUẢ TÌM KIẾM" : "KHO ỨNG DỤNG HENDY") + "</b>\n" +
-    "Tìm thấy " + apps.length + " ứng dụng. Chọn một ứng dụng để xem thông tin:",
+    "Hiển thị " + Math.min(apps.length, APP_LIMIT) + " trong " + apps.length + " ứng dụng phù hợp. Chọn một ứng dụng để xem thông tin:",
     { reply_markup: { inline_keyboard: [...rows, [inlineUrlButton("🌐 Mở toàn bộ kho ứng dụng", storeUrl(env))].filter(Boolean)] } }
   );
 }
@@ -224,7 +213,7 @@ async function showReleases(env, chatId, platform = "") {
   const label = platform ? " · " + (PLATFORM_LABELS[platform] || platform) : "";
   await sendMessage(env, chatId,
     "<b>BẢN PHÁT HÀNH MỚI" + escapeHtml(label.toUpperCase()) + "</b>\n" +
-    "Có " + releases.length + " bản phát hành. Chọn nút tải tương ứng:",
+    "Hiển thị " + Math.min(releases.length, RELEASE_LIMIT) + " trong " + releases.length + " bản phát hành. Chọn nút tải tương ứng:",
     { reply_markup: { inline_keyboard: releaseRows(releases), ...{} } }
   );
 }
