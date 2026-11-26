@@ -18,4 +18,12 @@ let alerts = await readFile(alertsPath, "utf8");
 alerts = alerts.replaceAll("__D1_DATABASE_ID__", d1);
 if (alerts.includes("__D1_DATABASE_ID__")) throw new Error("Alert Worker D1 placeholder was not replaced.");
 await writeFile(alertsPath, alerts);
+
+const telegramPath = "workers/telegram-bot/wrangler.toml";
+let telegram = await readFile(telegramPath, "utf8");
+if (process.env.HENDY_PUBLIC_STORE_URL) {
+  telegram = telegram.replace(/PUBLIC_STORE_URL = \".*\"/, "PUBLIC_STORE_URL = " + quoteToml(process.env.HENDY_PUBLIC_STORE_URL));
+}
+await writeFile(telegramPath, telegram);
+
 console.log("Generated Wrangler runtime configs using provisioned D1/KV IDs.");
