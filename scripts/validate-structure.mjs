@@ -25,7 +25,7 @@ const required = [
   "docs/DEPLOY-CLOUDFLARE.md", "workers/edge-router/src/index.js", "workers/edge-router/wrangler.toml", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
   "workers/backend-api/src/github-sync.js", "workers/backend-api/src/db/schema.sql",
   "workers/self-healing-bot/src/index.js", "workers/self-healing-bot/src/llm-analyzer.js",
-  "workers/alert-notifier/src/index.js", "scripts/provision-cloudflare-resources.mjs",
+  "workers/alert-notifier/src/index.js", "workers/telegram-bot/src/index.js", "workers/telegram-bot/wrangler.toml", "tests/telegram-bot.test.mjs", "scripts/provision-cloudflare-resources.mjs",
   "scripts/render-cloudflare-config.mjs", "scripts/prepare-pages.mjs", "scripts/smoke-test.mjs", ".github/workflows/matrix-build.yml",
   ".github/workflows/deploy.yml", ".github/workflows/deploy-cloudflare.yml", ".github/workflows/store-release.yml",
   ".github/workflows/build-status-callback.yml", "wrangler.toml",
@@ -62,6 +62,16 @@ assert.doesNotMatch(root, /^service\s*=\s*"hendy-app-store-api"\s*$/m,
 assert.match(root, /not_found_handling = "none"/, "Worker assets must leave unmatched route handling to the router.");
 assert.ok(root.includes('run_worker_first = ["/api*", "/admin*", "/web-admin", "/web-admin/*"]'),
   "Admin/API paths must run through the Worker before matching static files are served.");
+const telegramWorker = readFileSync("workers/telegram-bot/wrangler.toml", "utf8");
+assert.match(telegramWorker, /name = "hendy-app-store-telegram-bot"/);
+assert.match(telegramWorker, /binding = "BACKEND_API"/);
+assert.match(telegramWorker, /service = "hendy-app-store-api"/, "Telegram Bot must use the existing public App Store API through a service binding.");
+const telegramSource = readFileSync("workers/telegram-bot/src/index.js", "utf8");
+for (const menuItem of ["🛍 Kho ứng dụng", "🔎 Tìm ứng dụng", "📦 Bản phát hành", "📲 Tải theo nền tảng", "🌐 Mở Hendy Store", "❔ Trợ giúp"]) {
+  assert.ok(telegramSource.includes(menuItem), "Telegram App Store menu is missing: " + menuItem);
+}
+assert.match(telegramSource, /X-Telegram-Bot-Api-Secret-Token/, "Telegram webhook must authenticate the secret header.");
+assert.match(telegramSource, /filterReleases/, "Telegram Bot must filter real published releases by platform.");
 const productionEdge = readFileSync("workers/edge-router/wrangler.toml", "utf8");
 assert.match(productionEdge, /name = "hendy-app-store-edge"/);
 assert.match(productionEdge, /service = "hendy-app-store-api"/, "Integrated router must bind the API Worker after API deployment.");
@@ -71,6 +81,9 @@ assert.match(productionEdge, /directory = "\.\.\/\.\.\/apps"/, "Production route
 const deployWorkflow = readFileSync(".github/workflows/deploy-cloudflare.yml", "utf8");
 assert.match(deployWorkflow, /Verify Cloudflare API token/);
 assert.match(deployWorkflow, /--dry-run/, "Cloudflare Worker bundles should be validated before remote deployment.");
+assert.match(deployWorkflow, /workers\/telegram-bot\/wrangler\.toml/, "Telegram Worker must be included in pre-deploy bundle validation.");
+assert.match(deployWorkflow, /TELEGRAM_BOT_TOKEN/, "Deployment must support optional Telegram Bot token configuration.");
+assert.match(deployWorkflow, /TELEGRAM_WEBHOOK_SECRET/, "Deployment must support authenticated Telegram webhook setup.");
 assert.match(deployWorkflow, /Public Store with Admin locked/, "The workflow should keep Admin fail-closed when Access is not configured.");
 const apiConfig = readFileSync("workers/backend-api/wrangler.toml", "utf8");
 for (const binding of ["RELEASES_BUCKET", "DB", "CONFIG_CACHE", "BUILD_QUEUE"]) assert.ok(apiConfig.includes(binding), "Backend binding missing: " + binding);
