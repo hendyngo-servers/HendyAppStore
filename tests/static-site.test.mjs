@@ -21,6 +21,12 @@ test("root homepage and Worker-served storefront source stay synchronized", () =
   assert.equal(read("index.html"), read("apps/web-user/index.html"));
 });
 
+test("Pages CSP explicitly permits the font stylesheet and font files", () => {
+  const headers = read("apps/web-user/_headers");
+  assert.ok(headers.includes("https://fonts.googleapis.com"));
+  assert.ok(headers.includes("https://fonts.gstatic.com"));
+});
+
 test("PHP compatibility bridge is constrained and excluded from Cloudflare assets", () => {
   const php = read("api.php");
   assert.ok(php.includes("HENDY_API_BASE_URL"));
