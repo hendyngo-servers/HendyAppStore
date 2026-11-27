@@ -7,7 +7,7 @@ const required = [
   "functions/_middleware.js", "functions/_lib/backend.js", "functions/api/auth.js", "functions/api/sync-logs.js", "functions/api/[[path]].js",
   "public/favicon.svg", "public/manifest.webmanifest", "public/robots.txt", "automation/README.md",
   "packages/db-schema/package.json", "packages/db-schema/migrations/0001_initial.sql", "packages/db-schema/validate.mjs",
-  "apps/web-user/index.html", "apps/web-user/src/app.js", "apps/web-user/src/components/PlatformDownloadActions.js",
+  "apps/web-user/index.html", "apps/web-user/dich-vu/index.html", "apps/web-user/dich-vu/services.css", "apps/web-user/dich-vu/hero.webp", "apps/web-user/src/app.js", "apps/web-user/src/components/PlatformDownloadActions.js",
   "apps/web-user/src/components/IOSOtaDownloader.js", "apps/web-user/src/components/MacOsDmgDownloader.js",
   "apps/web-user/src/components/AndroidDirectLink.js", "apps/web-user/src/components/WindowsSafeInstaller.js",
   "apps/web-user/src/hooks/useDeviceDetect.js", "apps/web-user/src/layouts/MobileAppStoreLayout.js",
@@ -41,6 +41,14 @@ for (const path of [".github/workflows/deploy-render.yml", "server.ts", "src/App
 const rootManifest = JSON.parse(readFileSync("package.json", "utf8"));
 assert.ok(rootManifest.workspaces?.includes("apps/web-user") && rootManifest.workspaces?.includes("apps/web-admin"), "Root npm workspaces must include both UI packages.");
 assert.ok(rootManifest.workspaces?.includes("packages/shared-types") && rootManifest.workspaces?.includes("packages/db-schema"), "Root npm workspaces must include shared types and D1 schema.");
+
+const serviceSourceHtml = readFileSync("apps/web-user/dich-vu/index.html", "utf8");
+assert.ok(readFileSync("apps/web-user/index.html", "utf8").includes('href="/dich-vu/"'), "Storefront must link to the services module.");
+assert.ok(serviceSourceHtml.includes("HENDY DIGITAL") && serviceSourceHtml.includes("/web-user/dich-vu/hero.webp"), "Service page must use the HENDY brand and hero image.");
+for (const staleValue of ["icof5p1f.cloudfly.vn", "123 Đường Công Nghệ", "0123-456-789", "info@icof5p1f.cloudfly.vn", "AIzaSyDoOLq_ts27g3vEog9sGYB0GJSyWBDK9gs", "api.php"]) assert.equal(serviceSourceHtml.includes(staleValue), false, "Source placeholder data must not be shipped: " + staleValue);
+const edgeRouterSource = readFileSync("workers/edge-router/src/index.js", "utf8");
+assert.ok(edgeRouterSource.includes('path === "/dich-vu"') && edgeRouterSource.includes('path.startsWith("/dich-vu/")'), "Edge Router must publish /dich-vu/.");
+assert.ok(pagesBuild.includes('const serviceSource = `${source}/dich-vu`;'), "Pages build must copy the services module.");
 const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
 assert.match(deployEntry, /push:/);
 assert.match(deployEntry, /branches:\s*\[main\]/, "Cloudflare deployment must auto-run on pushes to main.");

@@ -78,6 +78,8 @@ export default {
 
     let assetPath = path;
     if (path === "/" || path === "/index.html") assetPath = "/web-user/index.html";
+    else if (path === "/dich-vu" || path === "/dich-vu/") assetPath = "/web-user/dich-vu/index.html";
+    else if (path.startsWith("/dich-vu/")) assetPath = "/web-user" + path;
     else if (!path.startsWith("/web-user/")) {
       // Keep direct public file URLs rooted inside the web-user bundle.
       assetPath = "/web-user" + (path.startsWith("/") ? path : "/" + path);

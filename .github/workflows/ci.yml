@@ -60,5 +60,12 @@ jobs:
           test -s dist/pages/index.html
           test -s dist/pages/config.js
           test -s dist/pages/web-user/src/app.js
+          test -s dist/pages/dich-vu/index.html
+          test -s dist/pages/web-user/dich-vu/index.html
+          test -s dist/pages/web-user/dich-vu/services.css
+          test -s dist/pages/web-user/dich-vu/hero.webp
+          grep -q "HENDY DIGITAL" dist/pages/dich-vu/index.html
+          grep -q "/dich-vu/" dist/pages/index.html
+          ! grep -Eqi "icof5p1f.cloudfly.vn|123 Đường Công Nghệ|0123-456-789|info@icof5p1f.cloudfly.vn" dist/pages/dich-vu/index.html
           test -s dist/pages/web-admin/index.html
           test -s dist/pages/web-admin/automation.bundle.js

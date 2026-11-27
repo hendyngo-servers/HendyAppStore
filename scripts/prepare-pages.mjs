@@ -8,6 +8,13 @@ if (existsSync("public")) await cp("public", output, { recursive: true });
 await mkdir(`${output}/web-user`, { recursive: true });
 await copyFile(`${source}/index.html`, `${output}/index.html`);
 await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
+const serviceSource = `${source}/dich-vu`;
+if (!existsSync(`${serviceSource}/index.html`) || !existsSync(`${serviceSource}/services.css`) || !existsSync(`${serviceSource}/hero.webp`)) {
+  throw new Error("The HENDY service module is incomplete.");
+}
+await cp(serviceSource, `${output}/web-user/dich-vu`, { recursive: true });
+await mkdir(`${output}/dich-vu`, { recursive: true });
+await copyFile(`${serviceSource}/index.html`, `${output}/dich-vu/index.html`);
 await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
 await copyFile(`${source}/_headers`, `${output}/_headers`);
 await copyFile(`${source}/_redirects`, `${output}/_redirects`);
@@ -44,6 +51,7 @@ if (!html.includes('<script src="/config.js"></script>')) {
 }
 await writeFile(indexPath, html);
 if (!existsSync(`${output}/web-user/src/app.js`)) throw new Error("Pages output is missing the public app entry point.");
+if (!existsSync(`${output}/dich-vu/index.html`) || !existsSync(`${output}/web-user/dich-vu/hero.webp`)) throw new Error("Pages output is missing the HENDY service route or hero asset.");
 if (!existsSync(`${output}/config.js`)) throw new Error("Pages runtime config was not generated.");
 if (process.env.GITHUB_OUTPUT) {
   await appendFile(process.env.GITHUB_OUTPUT, `api_base=${apiOrigin}\nedge_base=${edgeOrigin}\n`);
