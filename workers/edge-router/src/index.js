@@ -20,7 +20,6 @@ function addClientHeaders(headers, request) {
   vary.add("User-Agent");
   headers.set("Vary", [...vary].join(", "));
 }
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
@@ -49,11 +48,11 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     if (path === "/healthz") return env.BACKEND_API ? env.BACKEND_API.fetch(new Request(new URL("/api/health", request.url), request)) : json({ success: false, error: "backend_unavailable" }, 503);
+    if (path === "/api.php") return json({ success: false, error: "php_not_supported", message: "Use the Cloudflare Worker API at /api/*." }, 410);
     if (path === "/api" || path.startsWith("/api/")) {
       if (!env.BACKEND_API) return json({ success: false, error: "backend_service_binding_missing" }, 503);
       return env.BACKEND_API.fetch(request);
     }
-
     const adminRequest = path === "/admin" || path.startsWith("/admin/") || path === "/web-admin" || path.startsWith("/web-admin/") || isAdminHost(request, env);
     if (adminRequest) {
       const gate = await adminAccessCheck(request, env);
@@ -63,9 +62,7 @@ export default {
       else if (path.startsWith("/admin/")) assetPath = "/web-admin/" + path.slice("/admin/".length);
       else if (isAdminHost(request, env) && (path === "/" || path === "/index.html")) assetPath = "/web-admin/index.html";
       else if (path === "/web-admin") assetPath = "/web-admin/index.html";
-      const assetUrl = new URL(assetPath, request.url);
-      const assetRequest = new Request(assetUrl, request);
-      const response = await env.STATIC_ASSETS.fetch(assetRequest);
+      const response = await env.STATIC_ASSETS.fetch(new Request(new URL(assetPath, request.url), request));
       const headers = new Headers(response.headers);
       headers.set("Cache-Control", assetPath.endsWith(".html") ? "no-store" : "private, max-age=300");
       headers.set("X-Content-Type-Options", "nosniff");
@@ -75,21 +72,21 @@ export default {
       addClientHeaders(headers, request);
       return new Response(response.body, { status: response.status, headers });
     }
-
     let assetPath = path;
     if (path === "/" || path === "/index.html") assetPath = "/web-user/index.html";
     else if (path === "/dich-vu" || path === "/dich-vu/") assetPath = "/web-user/dich-vu/index.html";
     else if (path.startsWith("/dich-vu/")) assetPath = "/web-user" + path;
-    else if (!path.startsWith("/web-user/")) {
-      // Keep direct public file URLs rooted inside the web-user bundle.
-      assetPath = "/web-user" + (path.startsWith("/") ? path : "/" + path);
-    }
+    else if (path === "/subpage" || path === "/subpage/") assetPath = "/web-user/subpage/index.html";
+    else if (path === "/legal-notice" || path === "/legal-notice/") assetPath = "/web-user/legal-notice/index.html";
+    else if (path === "/privacy" || path === "/privacy/") assetPath = "/web-user/privacy/index.html";
+    else if (path === "/sitemap.xml") assetPath = "/web-user/sitemap.xml";
+    else if (!path.startsWith("/web-user/")) assetPath = "/web-user" + (path.startsWith("/") ? path : "/" + path);
     const response = await env.STATIC_ASSETS.fetch(new Request(pathWith(assetPath, request.url), request));
     const headers = new Headers(response.headers);
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     headers.set("X-Frame-Options", "DENY");
-    headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+    headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
     addClientHeaders(headers, request);
     return new Response(response.body, { status: response.status, headers });
   }

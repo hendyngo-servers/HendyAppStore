@@ -182,3 +182,10 @@ The Admin metadata form can save an HTTPS icon URL and up to eight HTTPS screens
 ## Deployment status notes
 
 The repository CI checks source structure, JavaScript syntax, unit/security-guard tests and the public Pages bundle. The deployment workflow validates the pinned Wrangler CLI against all three Worker configurations before remote changes. A Cloudflare API token and 32-hex account ID are required to deploy. Access settings (`CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `CF_ACCESS_ADMIN_EMAILS`) are an all-or-none group: when omitted, the Public Store and Workers can deploy, but Admin APIs intentionally remain locked with a fail-closed response until the values are supplied. To enable Admin, configure all three values and rerun **Deploy Hendy App Store to Cloudflare Workers and Pages**; also create the corresponding Cloudflare Zero Trust Access applications/policies. CI success alone does not mean a deployment happened.
+
+
+## Root static website layout
+
+The top-level website now mirrors the Public Store and provides standalone /subpage/, /legal-notice/ and /privacy/ routes, a sitemap, custom CSS/JavaScript and a font stylesheet. The build syncs this source into apps/web-user so both the Pages output and the Edge Router serve the same files. See [docs/STATIC-SITE-LAYOUT.md](docs/STATIC-SITE-LAYOUT.md) for the asset manifest, route mapping and PHP compatibility note.
+
+The root api.php is only an optional, allow-listed GET bridge for conventional PHP hosting. It is excluded from the Cloudflare asset bundle; the production API remains the Cloudflare Worker at /api/*. Flag SVGs are copied from the pinned MIT flag-icons package during build. Original font binaries, product screenshots and legacy WebCard chunks were not present in the source repository and are not fabricated.

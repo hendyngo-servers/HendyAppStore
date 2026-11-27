@@ -6,14 +6,18 @@ await rm("dist", { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 if (existsSync("public")) await cp("public", output, { recursive: true });
 const source = "apps/web-user";
-await copyFile(`${source}/index.html`, `${output}/index.html`);
-await copyFile(`${source}/_headers`, `${output}/_headers`);
-await copyFile(`${source}/_redirects`, `${output}/_redirects`);
-await cp(`${source}/src`, `${output}/web-user/src`, { recursive: true });
-await copyFile(`${source}/favicon.svg`, `${output}/web-user/favicon.svg`);
-// Pages Functions can serve the Admin Studio too; middleware gates every Admin route through Backend Access validation.
-await cp("apps/web-admin", `${output}/web-admin`, { recursive: true });
-await copyFile("apps/web-admin/automation.bundle.js", `${output}/web-admin/automation.bundle.js`);
+await copyFile(source + "/index.html", output + "/index.html");
+await copyFile(source + "/_headers", output + "/_headers");
+await copyFile(source + "/_redirects", output + "/_redirects");
+await cp(source + "/src", output + "/web-user/src", { recursive: true });
+await copyFile(source + "/favicon.svg", output + "/web-user/favicon.svg");
+for (const path of ["subpage", "legal-notice", "privacy", "js", "css", "g", "bundles", "images", "webcard"]) {
+  if (!existsSync(source + "/" + path)) throw new Error("Static website asset is missing from the Worker source tree: " + path);
+  await cp(source + "/" + path, output + "/" + path, { recursive: true });
+}
+await copyFile(source + "/sitemap.xml", output + "/sitemap.xml");
+await cp("apps/web-admin", output + "/web-admin", { recursive: true });
+await copyFile("apps/web-admin/automation.bundle.js", output + "/web-admin/automation.bundle.js");
 
 function normalizedOrigin(value) {
   const rawValue = String(value || "").trim();
@@ -21,23 +25,14 @@ function normalizedOrigin(value) {
   if (!raw) return "";
   let url;
   try { url = new URL(raw); } catch { throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be absolute HTTPS URLs."); }
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
-    throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be clean HTTPS origins.");
-  }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL must be clean HTTPS origins.");
   return url.origin;
 }
 const apiOrigin = normalizedOrigin(process.env.HENDY_API_BASE_URL);
 const edgeOrigin = normalizedOrigin(process.env.HENDY_EDGE_BASE_URL);
-const config = {
-  apiBaseUrl: apiOrigin ? apiOrigin + "/api" : "/api",
-  adminUrl: edgeOrigin ? edgeOrigin + "/admin" : "/admin"
-};
-await writeFile(`${output}/config.js`, `window.HENDY_CONFIG = Object.freeze(${JSON.stringify(config)});\n`);
-if (!existsSync(`${output}/web-user/src/app.js`)) throw new Error("Public app entry point was not copied.");
-if (!existsSync(`${output}/config.js`)) throw new Error("Runtime API config was not generated.");
-console.log(JSON.stringify({
-  output,
-  apiConfigured: Boolean(apiOrigin),
-  adminConfigured: Boolean(edgeOrigin),
-  note: "For standalone Pages builds set HENDY_API_BASE_URL and HENDY_EDGE_BASE_URL; the production GitHub workflow injects these after provisioning."
-}, null, 2));
+const config = { apiBaseUrl: apiOrigin ? apiOrigin + "/api" : "/api", adminUrl: edgeOrigin ? edgeOrigin + "/admin" : "/admin" };
+await writeFile(output + "/config.js", "window.HENDY_CONFIG = Object.freeze(" + JSON.stringify(config) + ");\n");
+if (!existsSync(output + "/web-user/src/app.js")) throw new Error("Public app entry point was not copied.");
+if (!existsSync(output + "/config.js")) throw new Error("Runtime API config was not generated.");
+if (existsSync(output + "/api.php")) throw new Error("The PHP compatibility bridge must never be published to Cloudflare Pages.");
+console.log(JSON.stringify({ output, apiConfigured: Boolean(apiOrigin), adminConfigured: Boolean(edgeOrigin), phpBridgePublished: false }, null, 2));
