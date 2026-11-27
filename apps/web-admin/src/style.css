@@ -89,3 +89,17 @@
 .automation-deploy-option small{font-size:9px;line-height:1.6;color:#8da2bf}
 .automation-deploy-link a{color:var(--mint);font-size:10px;text-decoration:none}
 .automation-deploy-link a:hover{text-decoration:underline}
+
+
+/* Centralized API connection panel */
+.api-panel{display:grid;gap:12px}
+.api-route{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;padding:10px 12px;border:1px solid #293d55;border-radius:9px;background:#091321;color:#91a6c1;font-size:9px}
+.api-route code{color:#a2f0dc;font:600 10px ui-monospace,monospace;overflow-wrap:anywhere;text-align:right}
+.api-health-status{margin:0;color:#a9bbd2;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+.api-binding-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.api-binding-grid span{padding:8px 9px;border:1px solid #35445a;border-radius:8px;background:#0a1321;color:#e8c785;font-size:8px;font-weight:800;overflow-wrap:anywhere}
+.api-binding-grid span.is-ready{border-color:#28594d;background:#0a211d;color:#85e6c9}
+.api-binding-grid span.is-missing{border-color:#5b4932;background:#21190f;color:#e8bd7d}
+.api-health-detail{color:#8194ae;font-size:8px;line-height:1.6;overflow-wrap:anywhere}
+.api-panel .button{justify-self:start}
+@media(max-width:700px){.api-binding-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.api-panel .button{width:100%}}
