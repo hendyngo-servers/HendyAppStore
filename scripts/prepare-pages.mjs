@@ -8,7 +8,7 @@ if (existsSync("public")) await cp("public", output, { recursive: true });
 await mkdir(output + "/web-user", { recursive: true });
 await copyFile(source + "/index.html", output + "/index.html");
 await cp(source + "/src", output + "/web-user/src", { recursive: true });
-const serviceSource = source + "/dich-vu";
+const serviceSource = `${source}/dich-vu`;
 if (!existsSync(serviceSource + "/index.html") || !existsSync(serviceSource + "/services.css") || !existsSync(serviceSource + "/hero.webp")) throw new Error("The HENDY service module is incomplete.");
 await cp(serviceSource, output + "/web-user/dich-vu", { recursive: true });
 await mkdir(output + "/dich-vu", { recursive: true });
