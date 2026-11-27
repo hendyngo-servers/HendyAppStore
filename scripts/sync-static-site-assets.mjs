@@ -20,6 +20,8 @@ await copyFile(flagPackage + "/css/flag-icons.min.css", flagRoot + "/css/flag-ic
 
 await mkdir(appRoot, { recursive: true });
 await copyFile("index.html", appRoot + "/index.html");
+if (!existsSync("public/manifest.webmanifest")) throw new Error("public/manifest.webmanifest is required for the PWA manifest.");
+await copyFile("public/manifest.webmanifest", appRoot + "/manifest.webmanifest");
 for (const directory of directories) await cp(directory, appRoot + "/" + directory, { recursive: true, force: true });
 
 function publicOrigin(input) {
