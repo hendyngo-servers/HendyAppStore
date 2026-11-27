@@ -48,7 +48,6 @@ assert.ok(serviceSourceHtml.includes("HENDY DIGITAL") && serviceSourceHtml.inclu
 for (const staleValue of ["icof5p1f.cloudfly.vn", "123 Đường Công Nghệ", "0123-456-789", "info@icof5p1f.cloudfly.vn", "AIzaSyDoOLq_ts27g3vEog9sGYB0GJSyWBDK9gs", "api.php"]) assert.equal(serviceSourceHtml.includes(staleValue), false, "Source placeholder data must not be shipped: " + staleValue);
 const edgeRouterSource = readFileSync("workers/edge-router/src/index.js", "utf8");
 assert.ok(edgeRouterSource.includes('path === "/dich-vu"') && edgeRouterSource.includes('path.startsWith("/dich-vu/")'), "Edge Router must publish /dich-vu/.");
-assert.ok(pagesBuild.includes('const serviceSource = `${source}/dich-vu`;'), "Pages build must copy the services module.");
 const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
 assert.match(deployEntry, /push:/);
 assert.match(deployEntry, /branches:\s*\[main\]/, "Cloudflare deployment must auto-run on pushes to main.");
@@ -56,6 +55,7 @@ assert.match(deployEntry, /npx wrangler pages deploy/);
 assert.match(deployEntry, /workers\/telegram-bot\/wrangler\.toml/, "Automatic main-branch deployment must include the Telegram Worker.");
 assert.match(deployEntry, /TELEGRAM_WEBHOOK_SECRET/, "Automatic deployment must configure the authenticated Telegram webhook when secrets exist.");
 const pagesBuild = readFileSync("scripts/prepare-pages.mjs", "utf8");
+assert.ok(pagesBuild.includes('const serviceSource = `${source}/dich-vu`;'), "Pages build must copy the services module.");
 assert.match(pagesBuild, /cp\("public", output, \{ recursive: true \}\)/, "Shared public assets must be copied into Pages output.");
 assert.match(readFileSync("apps/web-user/index.html", "utf8"), /manifest\.webmanifest/, "Storefront should link its PWA manifest.");
 assert.match(deployEntry, /wrangler pages deploy/);
