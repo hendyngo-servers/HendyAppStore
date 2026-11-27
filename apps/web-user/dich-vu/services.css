@@ -1,0 +1,54 @@
+/* HENDY DIGITAL services page — shares tokens and controls from the Store stylesheet. */
+.service-page{background:radial-gradient(ellipse at 82% 8%,#12365a66 0,transparent 36%),var(--bg)}
+.service-page .service-nav-active{color:var(--mint);font-weight:800}
+.service-hero{position:relative;isolation:isolate;display:flex;align-items:center;min-height:590px;max-width:1180px;margin:24px auto 0;padding:58px 42px;border:1px solid #2a4262;border-radius:26px;overflow:hidden;background:#081321;box-shadow:0 30px 90px #0006}
+.service-hero-art{position:absolute;z-index:-2;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.97}
+.service-hero:after{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(90deg,#081321 0%,#081321f2 27%,#081321aa 52%,#08132135 78%,#08132155 100%),linear-gradient(0deg,#08132155,transparent 42%)}
+.service-hero-content{width:min(590px,58%);position:relative;z-index:1}
+.service-hero .eyebrow{display:flex;align-items:center;gap:9px}
+.eyebrow-pulse{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 14px var(--mint)}
+.service-hero h1{margin:0;font-size:clamp(42px,5.5vw,68px);line-height:1.04;letter-spacing:-.06em;font-weight:900}
+.service-hero h1 span,.service-intro h2 span,.service-section-heading h2 span,.service-process h2 span,.service-cta h2 span{background:linear-gradient(90deg,#74eed5,#8fa3ff);color:transparent;background-clip:text}
+.service-hero-lead{max-width:530px;margin:22px 0 0;color:#bac9df;font-size:15px;line-height:1.85}
+.service-hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:25px}
+.service-hero-actions .button{gap:10px}
+.service-hero-note{margin:21px 0 0;color:#7f94b4;font:800 9px/1.5 ui-monospace,monospace;letter-spacing:.16em}
+.service-hero-caption{position:absolute;right:22px;bottom:19px;display:flex;align-items:center;gap:9px;color:#b6c7df;font:800 8px ui-monospace,monospace;letter-spacing:.16em;text-shadow:0 2px 8px #000}
+.service-hero-caption span{width:6px;height:6px;border-radius:50%;background:#55e3c2;box-shadow:0 0 12px #55e3c2}
+.service-page .section{max-width:1180px;padding:72px 24px}
+.service-intro{display:grid;grid-template-columns:.9fr 1.1fr;gap:50px;align-items:start}
+.service-intro h2,.service-section-heading h2,.service-process h2,.service-cta h2{margin:0;font-size:clamp(31px,4vw,46px);line-height:1.1;letter-spacing:-.05em}
+.service-intro-detail{padding:4px 0 0 27px;border-left:1px solid #3b5978}
+.service-intro-detail p{margin:0 0 14px;color:#a9bad3;font-size:13px;line-height:1.95}
+.service-offerings{border-top:1px solid #ffffff12}
+.service-section-heading{display:flex;justify-content:space-between;align-items:end;gap:28px;margin-bottom:27px}
+.service-section-heading>p{max-width:420px;margin:0;color:var(--muted);font-size:12px;line-height:1.85}
+.service-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.service-card{position:relative;min-height:250px;padding:22px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#14243b,#0d1729);box-shadow:0 12px 32px #0003;transition:transform .18s,border-color .18s}
+.service-card:hover{transform:translateY(-3px);border-color:#4b8293}
+.service-card-number{position:absolute;top:20px;right:20px;color:#7185a4;font:800 9px ui-monospace,monospace;letter-spacing:.14em}
+.service-card-icon{display:grid;place-items:center;width:45px;height:45px;margin-bottom:20px;border:1px solid #3c7587;border-radius:13px;background:#16394f;color:#93e8ef;font-size:22px}
+.service-card h3{margin:0 0 10px;font-size:16px;line-height:1.38}
+.service-card p{min-height:68px;margin:0 0 17px;color:#9eafc9;font-size:11px;line-height:1.8}
+.service-card-tag{color:#77cdbc;font:800 8px ui-monospace,monospace;letter-spacing:.13em}
+.service-process{display:grid;grid-template-columns:.85fr 1.15fr;gap:54px;align-items:start;border-top:1px solid #ffffff12;border-bottom:1px solid #ffffff12;background:linear-gradient(100deg,#10253d55,transparent)}
+.service-process-intro>p:last-child{max-width:380px;color:var(--muted);font-size:12px;line-height:1.9}
+.service-steps{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.service-steps li{display:flex;align-items:center;gap:15px;padding:15px 16px;border:1px solid #2a405c;border-radius:13px;background:#0f1e32}
+.service-steps li>span{display:grid;place-items:center;flex:0 0 36px;height:36px;border:1px solid #3b7182;border-radius:10px;background:#15354b;color:#91e8e9;font:900 10px ui-monospace,monospace}
+.service-steps strong,.service-steps small{display:block}
+.service-steps strong{font-size:12px}
+.service-steps small{margin-top:5px;color:#8fa3bf;font-size:10px;line-height:1.6}
+.service-cta{display:flex;align-items:center;justify-content:space-between;gap:28px;max-width:1132px;margin:30px auto 76px;padding:30px;border:1px solid #365b79;border-radius:18px;background:linear-gradient(110deg,#15334b,#0d1a2b);box-shadow:0 20px 55px #0004}
+.service-cta>div:first-child{max-width:640px}
+.service-cta>div:first-child>p:last-child{margin:13px 0 0;color:var(--muted);font-size:12px;line-height:1.8}
+.service-cta-actions{display:flex;flex-direction:column;align-items:flex-start;gap:13px;flex:none}
+.service-source-link{color:#9eb6d3;font-size:10px;text-decoration:underline;text-underline-offset:3px}
+.service-source-link:hover{color:var(--mint)}
+.service-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:24px max(24px,calc((100vw - 1180px)/2));border-top:1px solid #ffffff15;color:#8295b2}
+.service-footer nav{display:flex;gap:16px;flex-wrap:wrap}
+.service-footer nav a,.service-footer>span{color:#8295b2;font-size:10px;text-decoration:none}
+.service-footer nav a:hover{color:var(--mint)}
+@media(max-width:900px){.service-hero{min-height:520px;margin:18px 18px 0;padding:42px 30px}.service-hero-content{width:min(560px,66%)}.service-section-heading{align-items:start;flex-direction:column}.service-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.service-process{gap:28px}.service-cta{margin-right:18px;margin-left:18px}}
+@media(max-width:650px){.service-page .topbar{padding:0 17px}.service-page .topbar nav{gap:12px}.service-page .topbar nav a{font-size:10px}.service-page .topbar nav a:first-child{display:none}.service-hero{min-height:600px;margin:12px 10px 0;padding:34px 22px;align-items:flex-start}.service-hero-art{object-position:64% center;opacity:.78}.service-hero:after{background:linear-gradient(90deg,#081321f5 0%,#081321d9 50%,#08132165 100%),linear-gradient(0deg,#081321dd 0%,transparent 65%)}.service-hero-content{width:100%;padding-top:25px}.service-hero h1{font-size:clamp(38px,10vw,52px)}.service-hero-lead{font-size:13px}.service-hero-caption{right:14px;bottom:14px;font-size:7px}.service-page .section{padding:52px 19px}.service-intro,.service-process{grid-template-columns:1fr;gap:18px}.service-intro h2,.service-section-heading h2,.service-process h2,.service-cta h2{font-size:35px}.service-intro-detail{padding-left:17px}.service-grid{grid-template-columns:1fr}.service-card{min-height:0}.service-card p{min-height:0}.service-steps li{padding:13px}.service-cta{display:block;margin:18px 10px 48px;padding:23px}.service-cta-actions{margin-top:20px}.service-cta-actions .button{width:100%}.service-footer{align-items:flex-start;flex-direction:column;padding:23px 19px}.service-footer nav{gap:12px}}
+@media(prefers-reduced-motion:reduce){.service-card{transition:none}}

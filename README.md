@@ -10,7 +10,7 @@ Hướng dẫn chi tiết từng bước, quyền API token, cấu hình Workers
 
 ## Monorepo layout
 
-- `apps/web-user/`: Adaptive public storefront; Edge/Browser OS detection; validated platform download actions for Android APK, Windows EXE/MSI/ZIP, macOS DMG/PKG/ZIP and iOS OTA manifests; D1-backed app icons and screenshots.
+- `apps/web-user/`: Adaptive public storefront; Edge/Browser OS detection; validated platform download actions for Android APK, Windows EXE/MSI/ZIP, macOS DMG/PKG/ZIP and iOS OTA manifests; D1-backed app icons and screenshots. The public `/dich-vu/` route is a standalone HENDY Digital services page with shared navigation and generated hero artwork.
 - `apps/web-admin/`: Code paste zone, optional Monaco Editor, multi-file/folder uploader, virtual file tree, D1 metadata form (HTTPS icon plus up to eight screenshots per app), GitHub Actions monitor, build queue request, R2 artifact draft intake, source analyzer and reviewed AI repair proposals.
 - `packages/shared-types/`: Shared AppData, ReleaseData and BuildLog types.
 - `packages/ui-components/`: Escaping, pill and bytes-format helpers shared by both UIs.
@@ -23,6 +23,10 @@ Hướng dẫn chi tiết từng bước, quyền API token, cấu hình Workers
 - `.github/workflows/matrix-build.yml`: Native build matrix; isolated signing job; publish only verified, signed products to R2.
 - `.github/workflows/store-release.yml`: Manual gated upload to Google Play or App Store Connect/TestFlight.
 - `.github/workflows/deploy-cloudflare.yml`: Provision and deploy R2, Pages, D1, KV, Queues, API Worker, Alert Worker, Telegram Bot Worker and Edge Router. Telegram webhook registration is enabled only when both Telegram secrets are present. No Render deployment code remains.
+
+## HENDY Digital service module
+
+The public `/dich-vu/` page adapts the usable sections from `bundles1.zip`: company introduction, custom software, technology consulting, maintenance, mobile applications, project management and customer support. Its source is `apps/web-user/dich-vu/`. The Pages build publishes it at both `/dich-vu/` and the Edge asset path `/web-user/dich-vu/`. The original Webcard runtime, PHP mail handler, embedded third-party API key, placeholder contact data and unverified testimonials are deliberately excluded. This frontend integration adds no D1 migration, API route, secret or authentication change.
 
 ## Monorepo and Pages Functions layout
 
