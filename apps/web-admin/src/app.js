@@ -6,6 +6,7 @@ import { fileTreeVisualizer } from "./components/FileTreeVisualizer.js";
 import { mobilePocketLayout } from "./layouts/MobileCMSPocketLayout.js";
 import { fullDevStudioLayout } from "./layouts/FullDevStudioLayout.js";
 import { AuthProvider } from "./providers/AuthProvider.js";
+import { resolveAdminApiUrl } from "./shared/api.js";
 import { buildStatusMonitor, renderBuildRows } from "./components/BuildStatusMonitor.js";
 import { storeMetadataForm } from "./components/StoreMetadataForm.js";
 import { artifactDraftForm } from "./components/ArtifactDraftForm.js";
@@ -34,6 +35,7 @@ function dashboardContent() {
     </div>
     <aside class="workspace-sidebar">
       <section id="tree" class="panel tree-panel"><div class="panel-heading"><div><p class="eyebrow">VIRTUAL FILE SYSTEM</p><h2>Cây thư mục</h2></div><span id="file-count" class="count-badge">0</span></div><div id="tree-summary" class="tree-summary">Chưa có tệp</div><div id="file-tree" class="file-tree"><div class="tree-empty">Thêm mã nguồn để dựng cấu trúc thư mục.</div></div><div class="tree-footer"><button id="clear-files" class="text-button">Xóa danh sách cục bộ</button></div></section>
+      <section class="panel api-panel"><div class="panel-heading"><div><p class="eyebrow">BACKEND API</p><h2>Kết nối API</h2></div><span id="api-health-badge" class="tag">ĐANG KIỂM TRA</span></div><p class="api-route"><span>Điểm truy cập</span><code id="api-endpoint">/api</code></p><p id="api-health-status" class="api-health-status" role="status">Đang kiểm tra Edge Router và Backend Worker…</p><div class="api-binding-grid"><span data-api-binding="D1">D1 · đang kiểm tra</span><span data-api-binding="KV">KV · đang kiểm tra</span><span data-api-binding="R2">R2 · đang kiểm tra</span><span data-api-binding="Queue">Queue · đang kiểm tra</span><span data-api-binding="GitHubSync">GitHub · đang kiểm tra</span></div><button id="refresh-api-status" class="button secondary" type="button">Kiểm tra API</button><small id="api-health-detail" class="api-health-detail">Các yêu cầu Admin đi cùng origin qua /api → Edge Router → Backend API Worker.</small></section>
       <section class="panel audit-panel"><p class="eyebrow">RUNTIME STATUS</p><div id="access-status" class="access-status"><i></i><span>Đang kiểm tra quyền truy cập…</span></div><p class="panel-hint">Admin API yêu cầu JWT do Cloudflare Access ký và email nằm trong allow-list.</p><div class="metric-row"><span>Tổng dung lượng</span><strong id="total-size">0 B</strong></div><div class="metric-row"><span>Tệp được nạp</span><strong id="metric-files">0</strong></div><div class="metric-row"><span>Build matrix</span><strong>Win · Android · iOS</strong></div></section>
     </aside>
   </div>`;
@@ -213,12 +215,57 @@ function bindFileInputs() {
   $("#metadata-form").addEventListener("submit", saveMetadata);
   $("#artifact-upload-form").addEventListener("submit", uploadArtifactDraft);
   $("#refresh-drafts").addEventListener("click", refreshReleaseDrafts);
+  $("#refresh-api-status").addEventListener("click", refreshApiStatus);
 }
 async function apiRequest(path, options = {}) {
-  const response = await fetch(path, { credentials: "include", ...options, headers: { Accept: "application/json", ...(options.headers || {}) } });
+  const endpoint = resolveAdminApiUrl(path);
+  const response = await fetch(endpoint, { credentials: "include", ...options, headers: { Accept: "application/json", ...(options.headers || {}) } });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const message = String(body.error || body.message || "API request failed");
+    throw new Error(message + " (HTTP " + response.status + ")");
+  }
   return body;
+}
+async function refreshApiStatus() {
+  const button = $("#refresh-api-status");
+  const badge = $("#api-health-badge");
+  const status = $("#api-health-status");
+  if (button) { button.disabled = true; button.textContent = "Đang kiểm tra…"; }
+  if (badge) { badge.textContent = "ĐANG KIỂM TRA"; badge.className = "tag"; }
+  if (status) status.textContent = "Đang gọi /api/health và /api/runtime/readiness…";
+  const endpoint = $("#api-endpoint");
+  if (endpoint) endpoint.textContent = window.location.origin + "/api";
+  try {
+    const [health, readiness] = await Promise.all([
+      apiRequest("/api/health"),
+      apiRequest("/api/runtime/readiness")
+    ]);
+    if (badge) { badge.textContent = "API ONLINE"; badge.className = "tag mint"; }
+    if (status) status.textContent = "Kết nối thành công · " + String(health.service || "Hendy Backend API");
+    const bindings = readiness.bindings || {};
+    for (const name of ["D1", "KV", "R2", "Queue", "GitHubSync"]) {
+      const item = document.querySelector('[data-api-binding="' + name + '"]');
+      if (!item) continue;
+      const ready = bindings[name] === true;
+      item.textContent = name + " · " + (ready ? "SẴN SÀNG" : "CHƯA CẤU HÌNH");
+      item.classList.toggle("is-ready", ready);
+      item.classList.toggle("is-missing", !ready);
+    }
+    const detail = $("#api-health-detail");
+    if (detail) detail.textContent = "Health: " + String(health.status || "healthy") + " · Kiểm tra lúc " + new Date().toLocaleTimeString("vi-VN");
+  } catch (error) {
+    if (badge) { badge.textContent = "API OFFLINE"; badge.className = "tag danger"; }
+    if (status) status.textContent = "Không kết nối được API: " + error.message;
+    const detail = $("#api-health-detail");
+    if (detail) detail.textContent = "Kiểm tra Edge Router, Backend API service binding và trạng thái triển khai Worker.";
+    for (const name of ["D1", "KV", "R2", "Queue", "GitHubSync"]) {
+      const item = document.querySelector('[data-api-binding="' + name + '"]');
+      if (item) { item.textContent = name + " · KHÔNG XÁC ĐỊNH"; item.classList.remove("is-ready"); item.classList.add("is-missing"); }
+    }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = "Kiểm tra API"; }
+  }
 }
 async function checkAccess() {
   const result = await authProvider.refresh();
@@ -387,9 +434,11 @@ export function mountAdminStudio(root) {
   bindFileInputs();
   renderTree();
   checkAccess();
+  refreshApiStatus();
   refreshBuilds();
   refreshReleaseDrafts();
   window.setInterval(() => { refreshBuilds(); refreshReleaseDrafts(); }, 15000);
+  window.setInterval(refreshApiStatus, 30000);
   window.addEventListener("resize", () => {
     const next = detectAdminDevice().mobile ? mobilePocketLayout(dashboardContent()) : fullDevStudioLayout(dashboardContent());
     // Avoid discarding active source data when viewport changes; only refresh the mode badge.

@@ -13,7 +13,7 @@ const required = [
   "apps/web-user/src/hooks/useDeviceDetect.js", "apps/web-user/src/layouts/MobileAppStoreLayout.js",
   "apps/web-user/src/layouts/DesktopPortalLayout.js",
   "apps/web-admin/index.html", "apps/web-admin/src/main.js", "apps/web-admin/src/app.js",
-  "apps/web-admin/src/providers/AuthProvider.js", "apps/web-admin/src/hooks/useVirtualFileTree.js",
+  "apps/web-admin/src/providers/AuthProvider.js", "apps/web-admin/src/shared/api.js", "apps/web-admin/src/hooks/useVirtualFileTree.js",
   "apps/web-admin/src/components/CodePasteZone.js", "apps/web-admin/src/components/FileUploadZone.js",
   "apps/web-admin/src/components/FileTreeVisualizer.js", "apps/web-admin/src/components/BuildStatusMonitor.js",
   "apps/web-admin/src/components/StoreMetadataForm.js", "apps/web-admin/src/components/ArtifactDraftForm.js",
@@ -25,9 +25,9 @@ const required = [
   "docs/DEPLOY-CLOUDFLARE.md", "workers/edge-router/src/index.js", "workers/edge-router/wrangler.toml", "workers/backend-api/src/index.js", "workers/backend-api/src/access.js",
   "workers/backend-api/src/github-sync.js", "workers/backend-api/src/db/schema.sql",
   "workers/self-healing-bot/src/index.js", "workers/self-healing-bot/src/llm-analyzer.js",
-  "workers/alert-notifier/src/index.js", "workers/telegram-bot/src/index.js", "workers/telegram-bot/wrangler.toml", "tests/telegram-bot.test.mjs", "scripts/provision-cloudflare-resources.mjs",
+  "workers/alert-notifier/src/index.js", "workers/telegram-bot/src/index.js", "workers/telegram-bot/wrangler.toml", "tests/telegram-bot.test.mjs", "tests/admin-api-routing.test.mjs", "scripts/provision-cloudflare-resources.mjs",
   "scripts/render-cloudflare-config.mjs", "scripts/prepare-pages.mjs", "scripts/smoke-test.mjs", ".github/workflows/matrix-build.yml",
-  ".github/workflows/deploy.yml", ".github/workflows/deploy-cloudflare.yml", ".github/workflows/store-release.yml",
+  ".github/workflows/deploy-cloudflare.yml", ".github/workflows/store-release.yml",
   ".github/workflows/build-status-callback.yml", "wrangler.toml",
   "android/settings.gradle", "android/app/src/main/AndroidManifest.xml",
   "windows/HendyAppStore.csproj", "ios/HendyAppStore.xcodeproj/project.pbxproj",
@@ -35,7 +35,7 @@ const required = [
 ];
 const missing = required.filter((path) => !existsSync(path));
 assert.deepEqual(missing, [], "Required architecture files are missing: " + missing.join(", "));
-for (const path of [".github/workflows/deploy-render.yml", "server.ts", "src/App.tsx", "public/index.html"]) {
+for (const path of [".github/workflows/deploy.yml", ".github/workflows/deploy-render.yml", "server.ts", "src/App.tsx", "public/index.html"]) {
   assert.equal(existsSync(path), false, `Legacy source should not exist after rewrite: ${path}`);
 }
 const rootManifest = JSON.parse(readFileSync("package.json", "utf8"));
@@ -48,7 +48,8 @@ assert.ok(serviceSourceHtml.includes("HENDY DIGITAL") && serviceSourceHtml.inclu
 for (const staleValue of ["icof5p1f.cloudfly.vn", "123 Đường Công Nghệ", "0123-456-789", "info@icof5p1f.cloudfly.vn", "AIzaSyDoOLq_ts27g3vEog9sGYB0GJSyWBDK9gs", "api.php"]) assert.equal(serviceSourceHtml.includes(staleValue), false, "Source placeholder data must not be shipped: " + staleValue);
 const edgeRouterSource = readFileSync("workers/edge-router/src/index.js", "utf8");
 assert.ok(edgeRouterSource.includes('path === "/dich-vu"') && edgeRouterSource.includes('path.startsWith("/dich-vu/")'), "Edge Router must publish /dich-vu/.");
-const deployEntry = readFileSync(".github/workflows/deploy.yml", "utf8");
+const deployEntry = readFileSync(".github/workflows/deploy-cloudflare.yml", "utf8");
+assert.equal(existsSync(".github/workflows/deploy.yml"), false, "Only one canonical Cloudflare deployment workflow should remain.");
 assert.match(deployEntry, /push:/);
 assert.match(deployEntry, /branches:\s*\[main\]/, "Cloudflare deployment must auto-run on pushes to main.");
 assert.match(deployEntry, /npx wrangler pages deploy/);
