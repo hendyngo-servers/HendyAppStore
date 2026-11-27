@@ -41,8 +41,8 @@ test("flag assets are generated reproducibly from the pinned package", () => {
   const manifest = JSON.parse(read("package.json"));
   assert.equal(manifest.dependencies?.["flag-icons"], "7.6.0");
   const sync = read("scripts/sync-static-site-assets.mjs");
-  assert.ok(sync.includes("node_modules/flag-icons/flags/1x1"));
-  assert.ok(sync.includes("node_modules/flag-icons/flags/4x3"));
+  assert.ok(sync.includes('flagPackage + "/flags/1x1"'));
+  assert.ok(sync.includes('flagPackage + "/flags/4x3"'));
   assert.ok(sync.includes("flag-icons.min.css"));
 });
 
