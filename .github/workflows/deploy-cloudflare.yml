@@ -1,6 +1,39 @@
 name: Deploy Hendy App Store to Cloudflare Workers and Pages
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "sitemap.xml"
+      - "subpage/**"
+      - "legal-notice/**"
+      - "privacy/**"
+      - "js/**"
+      - "css/**"
+      - "g/**"
+      - "bundles/**"
+      - "images/**"
+      - "webcard/**"
+      - "website/**"
+      - "apps/**"
+      - "public/**"
+      - "functions/**"
+      - "workers/**"
+      - "packages/**"
+      - "android/**"
+      - "windows/**"
+      - "ios/**"
+      - "macos/**"
+      - "scripts/**"
+      - "automation/**"
+      - "tests/**"
+      - "docs/**"
+      - "package.json"
+      - "api.php"
+      - "vite.config.ts"
+      - "wrangler.toml"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -101,14 +134,16 @@ jobs:
           BUILD_STATUS_WEBHOOK_URL: ${{ steps.provision.outputs.alerts_base }}/webhooks/github/build-status
         run: node scripts/sync-github-variable.mjs
         continue-on-error: true
-      - name: Render runtime D1/KV bindings into Wrangler configs
+      - name: Render runtime D1/KV bindings and public site routes
         env:
           D1_DATABASE_ID: ${{ steps.provision.outputs.d1_id }}
           KV_NAMESPACE_ID: ${{ steps.provision.outputs.kv_id }}
           HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || steps.provision.outputs.pages_base }}
           HENDY_PUBLIC_STORE_URL: ${{ steps.provision.outputs.pages_base }}
-        run: node scripts/render-cloudflare-config.mjs
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || steps.provision.outputs.pages_base }}
+        run: |
+          node scripts/render-cloudflare-config.mjs
+          node scripts/sync-static-site-assets.mjs
       - name: Validate Wrangler bundles before remote deploy
         run: |
           set -euo pipefail
@@ -218,6 +253,7 @@ jobs:
         env:
           HENDY_API_BASE_URL: ${{ steps.provision.outputs.api_base }}
           HENDY_EDGE_BASE_URL: ${{ steps.provision.outputs.edge_base }}
+          HENDY_PUBLIC_STORE_URL: ${{ steps.provision.outputs.pages_base }}
         run: node scripts/prepare-pages.mjs
       - name: Configure Pages Functions backend origin
         env:
@@ -239,24 +275,3 @@ jobs:
           PAGES_BASE_URL: ${{ steps.provision.outputs.pages_base }}
           TELEGRAM_BOT_BASE: ${{ steps.provision.outputs.telegram_bot_base }}
         run: node scripts/smoke-test.mjs
-      - name: Deployment summary
-        if: always()
-        env:
-          API_BASE: ${{ steps.provision.outputs.api_base }}
-          EDGE_BASE: ${{ steps.provision.outputs.edge_base }}
-          ALERTS_BASE: ${{ steps.provision.outputs.alerts_base }}
-          TELEGRAM_BOT_BASE: ${{ steps.provision.outputs.telegram_bot_base }}
-          PAGES_BASE: ${{ steps.provision.outputs.pages_base }}
-        run: |
-          {
-            echo "### Hendy App Store Cloudflare deployment"
-            echo
-            echo "- Public Store: ${PAGES_BASE:-not deployed}"
-            echo "- Edge Router / Admin entry: ${EDGE_BASE:-not deployed}/admin"
-            echo "- Backend API: ${API_BASE:-not deployed}"
-            echo "- Alert Notifier: ${ALERTS_BASE:-not deployed}/webhooks/github/build-status"
-            echo "- Telegram Bot Worker: ${TELEGRAM_BOT_BASE:-not deployed} (webhook configured only when both Telegram secrets are present)"
-            echo "- R2, D1, KV and Queue: hendy-app-store resources"
-            echo "- Access policy: verify Cloudflare Zero Trust protects /admin*, /web-admin/* and /api/* before sharing Admin URL."
-            echo "- Store publishing requires signed artifacts and protected developer-account credentials."
-          } >> "$GITHUB_STEP_SUMMARY"

@@ -11,6 +11,14 @@ await copyFile(source + "/_headers", output + "/_headers");
 await copyFile(source + "/_redirects", output + "/_redirects");
 await cp(source + "/src", output + "/web-user/src", { recursive: true });
 await copyFile(source + "/favicon.svg", output + "/web-user/favicon.svg");
+await copyFile(source + "/manifest.webmanifest", output + "/web-user/manifest.webmanifest");
+const serviceSource = source + "/dich-vu";
+for (const file of ["index.html", "services.css", "hero.webp"]) {
+  if (!existsSync(serviceSource + "/" + file)) throw new Error("HENDY service asset is missing: " + file);
+}
+await cp(serviceSource, output + "/web-user/dich-vu", { recursive: true });
+await mkdir(output + "/dich-vu", { recursive: true });
+await copyFile(serviceSource + "/index.html", output + "/dich-vu/index.html");
 for (const path of ["subpage", "legal-notice", "privacy", "js", "css", "g", "bundles", "images", "webcard"]) {
   if (!existsSync(source + "/" + path)) throw new Error("Static website asset is missing from the Worker source tree: " + path);
   await cp(source + "/" + path, output + "/" + path, { recursive: true });

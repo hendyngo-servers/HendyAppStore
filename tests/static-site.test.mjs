@@ -63,3 +63,15 @@ test("sitemap template includes every public content route", () => {
     assert.ok(sitemap.includes(route), "Sitemap is missing " + route);
   }
 });
+
+
+test("Worker and Pages builds include the PWA manifest and HENDY service route", () => {
+  const sync = read("scripts/sync-static-site-assets.mjs");
+  const build = read("scripts/build.mjs");
+  const pages = read("scripts/prepare-pages.mjs");
+  assert.ok(sync.includes('copyFile("public/manifest.webmanifest", appRoot + "/manifest.webmanifest")'));
+  assert.ok(build.includes('source + "/manifest.webmanifest"'));
+  assert.ok(build.includes('output + "/web-user/dich-vu"'));
+  assert.ok(build.includes('output + "/dich-vu/index.html"'));
+  assert.ok(pages.includes('output + "/web-user/manifest.webmanifest"') || pages.includes('source + "/manifest.webmanifest"'));
+});
