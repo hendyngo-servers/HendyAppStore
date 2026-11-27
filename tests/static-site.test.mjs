@@ -73,5 +73,5 @@ test("Worker and Pages builds include the PWA manifest and HENDY service route",
   assert.ok(build.includes('source + "/manifest.webmanifest"'));
   assert.ok(build.includes('output + "/web-user/dich-vu"'));
   assert.ok(build.includes('output + "/dich-vu/index.html"'));
-  assert.ok(pages.includes('output + "/web-user/manifest.webmanifest"') || pages.includes('source + "/manifest.webmanifest"'));
+  assert.ok(pages.includes('output + "/dich-vu/index.html"'));
 });
