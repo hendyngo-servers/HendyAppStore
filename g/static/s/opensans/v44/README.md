@@ -1,0 +1,1 @@
+The original Open Sans WOFF2 assets listed in the proposed layout were not present in this repository. The website currently loads Open Sans using the Google Fonts CSS2 stylesheet in /g/fonts.css. Add the licensed local files here before declaring this directory self-hosted.

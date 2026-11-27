@@ -1,0 +1,1 @@
+dummy.png is a transparent 1x1 fallback only. The five image IDs and crop folders from the supplied layout are reserved because their original product screenshots were not present in this Git repository. Add licensed image files before referencing them in the catalog; do not use the transparent fallback as a product thumbnail.

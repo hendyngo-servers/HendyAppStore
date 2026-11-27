@@ -1,0 +1,1 @@
+The source repository did not contain the WebCard CSS bundle, runtime chunks or original WebCard fonts. This directory is reserved for a verified and licensed integration. The live Store uses the maintained modules under apps/web-user/src; no fake minified bundles are generated.

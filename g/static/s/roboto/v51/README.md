@@ -1,0 +1,1 @@
+The original Roboto WOFF2 assets listed in the proposed layout were not present in this repository. The website currently loads Roboto using the Google Fonts CSS2 stylesheet in /g/fonts.css. Add the licensed local files here before declaring this directory self-hosted.
